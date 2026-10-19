@@ -32,18 +32,18 @@ A prévia pública agora está conectada ao projeto Supabase NexEl. As funcional
 
 Requer Node.js compatível com Vite 6.
 
-\`\`\`bash
+```bash
 npm install
 npm test
 npm run build
 npm run dev
-\`\`\`
+```
 
 ## Configuração do Supabase
 
-1. Copie \`.env.example\` para \`.env.local\`.
-2. Preencha \`VITE_SUPABASE_URL\` e \`VITE_SUPABASE_PUBLISHABLE_KEY\` com a URL do projeto e uma chave publishable/anon pública.
-3. Nunca use uma chave \`service_role\` ou secret no navegador.
+1. Copie `.env.example` para `.env.local`.
+2. Preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` com a URL do projeto e uma chave publishable/anon pública.
+3. Nunca use uma chave `service_role` ou secret no navegador.
 4. Configure a URL pública do site em **Authentication → URL Configuration** no Supabase. Com confirmação de e-mail habilitada, o usuário precisa confirmar o endereço antes do primeiro login.
 5. Mantenha RLS habilitado. As políticas existentes restringem gravações ao usuário autenticado e seus próprios registros.
 
@@ -51,7 +51,7 @@ npm run dev
 
 1. Testar cadastro, confirmação de e-mail, login e saída no site publicado.
 2. Testar RLS com duas contas independentes e tentativas negativas.
-3. Resolver o aviso do Advisor relativo à função SECURITY DEFINER \`accept_server_invite\` antes de ativar convites de comunidades.
+3. Resolver o aviso do Advisor relativo à função SECURITY DEFINER `accept_server_invite` antes de ativar convites de comunidades.
 4. Adicionar testes automatizados que executem contra um projeto de teste isolado.
 5. Implementar respostas, notificações, bloqueios, denúncias, limites contra spam e ferramentas de moderação.
 6. Construir comunidades, canais e mensagens com suas regras de acesso.
@@ -59,6 +59,6 @@ npm run dev
 
 ## Identidade visual
 
-Tema dark com azul-marinho \`#071321\`, azul \`#2F8EE5\`, verde \`#35D17D\` e amarelo \`#FFD447\`.
+Tema dark com azul-marinho `#071321`, azul `#2F8EE5`, verde `#35D17D` e amarelo `#FFD447`.
 
 Desenvolvido por Jonathan Otiniel como projeto independente.
