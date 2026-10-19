@@ -4,7 +4,7 @@
 
 ## Estado desta versão
 
-A prévia pública está conectada ao projeto Supabase NexEl. Cadastro e login, perfil, feed, publicações, curtidas, reposts, respostas, favoritos, seguir pessoas, comunidades públicas, adesão de membros, canais padrão e chat de texto persistente usam o banco remoto. As ações protegidas exigem uma conta e respeitam as políticas de Row Level Security (RLS) do Supabase.
+A prévia pública está conectada ao projeto Supabase NexEl. A rede social exige uma sessão válida para exibir o feed e as demais áreas; visitantes veem apenas a tela de entrada. Cadastro e login por e-mail/senha e login social com Google/GitHub (depois de configurar os provedores OAuth) usam Supabase Auth. Perfil, feed, publicações, curtidas, reposts, respostas, favoritos, seguir pessoas, comunidades, canais e mensagens usam o banco remoto, com regras Row Level Security (RLS).
 
 **Ainda não considerar prontos:** notificações em tempo real, gestão avançada de canais e permissões, moderação avançada, bots e chamadas de voz/vídeo. Os canais de voz aparecem no sistema, mas áudio/vídeo não está implementado. O chat dos canais e as mensagens privadas atualizam automaticamente em intervalos curtos; ainda não são um canal realtime.
 
@@ -18,7 +18,9 @@ A prévia pública está conectada ao projeto Supabase NexEl. Cadastro e login, 
 
 ## Funcionalidades conectadas
 
-- Cadastro com e-mail e senha e login pelo Supabase Auth
+- Tela de entrada obrigatória antes de exibir feed e conteúdo social
+- Cadastro e login com e-mail/senha pelo Supabase Auth
+- Botões para login OAuth com GitHub e Google (requer Client ID/Secret e ativação dos provedores no Supabase)
 - Criação de perfil e edição de nome, usuário e bio
 - Feed público carregado do banco
 - Publicações de texto de até 500 caracteres
@@ -48,18 +50,20 @@ npm run dev
 1. Copie `.env.example` para `.env.local`.
 2. Preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` com a URL do projeto e uma chave publishable/anon pública.
 3. Nunca use uma chave `service_role` ou secret no navegador.
-4. Configure a URL pública do site em **Authentication → URL Configuration** no Supabase. Com confirmação de e-mail habilitada, o usuário precisa confirmar o endereço antes do primeiro login.
-5. Mantenha RLS habilitado. As políticas existentes restringem gravações ao usuário autenticado e seus próprios registros.
+4. Configure a URL pública do site em **Authentication → URL Configuration** no Supabase. Adicione `https://nexel-social.onrender.com` às Redirect URLs permitidas; mantenha a URL local de desenvolvimento se necessário. Com confirmação de e-mail habilitada, o usuário precisa confirmar o endereço antes do primeiro login.
+5. Para Google e GitHub, crie uma OAuth App em cada provedor, copie o Client ID/Client Secret para **Authentication → Sign In / Providers** e ative cada provedor. Use como callback OAuth do provedor a URL informada pelo próprio Supabase, no formato `https://<project-ref>.supabase.co/auth/v1/callback`. Não coloque os segredos no código do frontend.
+6. Mantenha RLS habilitado. As políticas existentes restringem gravações ao usuário autenticado e seus próprios registros.
 
 ## Próximos gates antes de ampliar o lançamento
 
 1. Testar cadastro, confirmação de e-mail, login e saída no site publicado.
-2. Testar RLS com duas contas independentes e tentativas negativas.
-3. Resolver o aviso do Advisor relativo à função SECURITY DEFINER `accept_server_invite` antes de ativar convites de comunidades.
-4. Adicionar testes automatizados que executem contra um projeto de teste isolado.
-5. Implementar notificações, bloqueios, denúncias, limites contra spam e ferramentas de moderação.
-6. Adicionar criação/gestão de canais personalizados e convites seguros; implementar notificações e recibos de leitura das mensagens privadas.
-7. Implementar voz/vídeo com infraestrutura própria e testes específicos de qualidade e privacidade.
+2. Ativar e validar o OAuth de Google e GitHub com credenciais próprias do projeto.
+3. Testar RLS com duas contas independentes, tentativas anônimas e tentativas negativas.
+4. Resolver o aviso do Advisor relativo à função SECURITY DEFINER `accept_server_invite` antes de ativar convites de comunidades.
+5. Adicionar testes automatizados que executem contra um projeto de teste isolado.
+6. Implementar notificações, bloqueios, denúncias, limites contra spam e ferramentas de moderação.
+7. Adicionar criação/gestão de canais personalizados e convites seguros; implementar notificações e recibos de leitura das mensagens privadas.
+8. Implementar voz/vídeo com infraestrutura própria e testes específicos de qualidade e privacidade.
 
 ## Identidade visual
 
