@@ -52,7 +52,7 @@ npm run dev
 3. Nunca use uma chave `service_role` ou secret no navegador.
 4. Configure a URL pública do site em **Authentication → URL Configuration** no Supabase. Adicione `https://nexel-social.onrender.com` às Redirect URLs permitidas; mantenha a URL local de desenvolvimento se necessário. Com confirmação de e-mail habilitada, o usuário precisa confirmar o endereço antes do primeiro login.
 5. Para Google e GitHub, crie uma OAuth App em cada provedor, copie o Client ID/Client Secret para **Authentication → Sign In / Providers** e ative cada provedor. Use como callback OAuth do provedor a URL informada pelo próprio Supabase, no formato `https://<project-ref>.supabase.co/auth/v1/callback`. Não coloque os segredos no código do frontend.
-5. Mantenha RLS habilitado. As políticas existentes restringem gravações ao usuário autenticado e seus próprios registros.
+6. Mantenha RLS habilitado. As políticas existentes restringem gravações ao usuário autenticado e seus próprios registros.
 
 ## Próximos gates antes de ampliar o lançamento
 
