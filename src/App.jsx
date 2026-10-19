@@ -69,10 +69,25 @@ export default function App() {
   const [replyDraft, setReplyDraft] = useState("");
   const [replyLoading, setReplyLoading] = useState(false);
   const [replyBusy, setReplyBusy] = useState(false);
+  const [myServers, setMyServers] = useState([]);
+  const [publicServers, setPublicServers] = useState([]);
+  const [communitiesLoading, setCommunitiesLoading] = useState(false);
+  const [currentServer, setCurrentServer] = useState(null);
+  const [serverChannels, setServerChannels] = useState([]);
+  const [currentChannel, setCurrentChannel] = useState(null);
+  const [channelMessages, setChannelMessages] = useState([]);
+  const [chatDraft, setChatDraft] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatBusy, setChatBusy] = useState(false);
+  const [communityOpen, setCommunityOpen] = useState(false);
+  const [newServerName, setNewServerName] = useState("");
+  const [newServerDesc, setNewServerDesc] = useState("");
+  const [newServerBusy, setNewServerBusy] = useState(false);
 
   const nav = [
     ["Início", "⌂"],
     ["Explorar", "⌕"],
+    ["Comunidades", "▦"],
     ["Notificações", "◉"],
     ["Mensagens", "▤"],
     ["Salvos", "◇"]
@@ -214,6 +229,74 @@ export default function App() {
     }
   }, [user?.id]);
 
+  const loadCommunities = useCallback(async () => {
+    if (!supabase || !user?.id) {
+      setMyServers([]);
+      setPublicServers([]);
+      return;
+    }
+    setCommunitiesLoading(true);
+    try {
+      const [membersResult, publicResult] = await Promise.all([
+        supabase.from("server_members").select("server_id, role").eq("user_id", user.id),
+        supabase.from("servers").select("id, owner_id, name, description, is_public, created_at").eq("is_public", true).order("created_at", { ascending: false }).limit(100)
+      ]);
+      if (membersResult.error) throw membersResult.error;
+      if (publicResult.error) throw publicResult.error;
+
+      const memberships = membersResult.data || [];
+      const memberIds = [...new Set(memberships.map(row => row.server_id))];
+      const memberServersResult = memberIds.length
+        ? await supabase.from("servers").select("id, owner_id, name, description, is_public, created_at").in("id", memberIds)
+        : { data: [], error: null };
+      if (memberServersResult.error) throw memberServersResult.error;
+
+      const all = new Map();
+      [...(publicResult.data || []), ...(memberServersResult.data || [])].forEach(server => {
+        all.set(server.id, server);
+      });
+      const memberSet = new Set(memberIds);
+      setMyServers([...all.values()].filter(server => memberSet.has(server.id)).sort((a, b) => a.name.localeCompare(b.name, "pt-BR")));
+      setPublicServers([...all.values()].filter(server => server.is_public && !memberSet.has(server.id)).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+    } catch (error) {
+      setNotice("Não consegui carregar as comunidades: " + friendlyError(error));
+    } finally {
+      setCommunitiesLoading(false);
+    }
+  }, [user?.id]);
+
+  const loadChannelMessages = useCallback(async (channel) => {
+    if (!supabase || !channel || channel.type !== "text") return;
+    setChatLoading(true);
+    try {
+      const { data: rows, error } = await supabase
+        .from("messages")
+        .select("id, channel_id, author_id, body, created_at, edited_at")
+        .eq("channel_id", channel.id)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) throw error;
+
+      const messages = rows || [];
+      const authorIds = [...new Set(messages.map(message => message.author_id))];
+      const profileResult = authorIds.length
+        ? await supabase.from("profiles").select("id, username, display_name").in("id", authorIds)
+        : { data: [], error: null };
+      if (profileResult.error) throw profileResult.error;
+      const byId = new Map((profileResult.data || []).map(person => [person.id, person]));
+      setChannelMessages(messages.reverse().map(message => {
+        const author = byId.get(message.author_id);
+        const name = author?.display_name || author?.username || "Pessoa usuária";
+        return { ...message, name, handle: author?.username ? "@" + author.username : "@usuario", initials: initialsFor(name), time: timeAgo(message.created_at) };
+      }));
+    } catch (error) {
+      setNotice("Não consegui carregar as mensagens do canal: " + friendlyError(error));
+      setChannelMessages([]);
+    } finally {
+      setChatLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!supabase) return undefined;
     let active = true;
@@ -248,6 +331,16 @@ export default function App() {
   useEffect(() => {
     refreshFeed();
   }, [refreshFeed]);
+
+  useEffect(() => {
+    loadCommunities();
+  }, [loadCommunities]);
+
+  useEffect(() => {
+    if (page !== "Comunidades" || !currentChannel || currentChannel.type !== "text") return undefined;
+    const interval = window.setInterval(() => loadChannelMessages(currentChannel), 12000);
+    return () => window.clearInterval(interval);
+  }, [page, currentChannel?.id, loadChannelMessages]);
 
   const visiblePosts = useMemo(() => {
     const text = query.trim().toLowerCase();
@@ -362,6 +455,162 @@ export default function App() {
     } finally {
       setActionBusy("");
     }
+  }
+
+  async function openServer(server) {
+    if (!user || !supabase) {
+      setPage("Comunidades");
+      setAuthMode("login");
+      setAuthFeedback("Entre para acessar comunidades e canais.");
+      setAuthOpen(true);
+      return;
+    }
+    setCurrentServer(server);
+    setCurrentChannel(null);
+    setServerChannels([]);
+    setChannelMessages([]);
+    setChatDraft("");
+    setPage("Comunidades");
+    setCommunitiesLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("channels")
+        .select("id, server_id, name, type, category, is_private, position")
+        .eq("server_id", server.id)
+        .order("position", { ascending: true });
+      if (error) throw error;
+      const rows = data || [];
+      setServerChannels(rows);
+      const firstText = rows.find(channel => channel.type === "text");
+      if (firstText) {
+        setCurrentChannel(firstText);
+        await loadChannelMessages(firstText);
+      }
+    } catch (error) {
+      setNotice("Não foi possível abrir os canais: " + friendlyError(error));
+    } finally {
+      setCommunitiesLoading(false);
+    }
+  }
+
+  async function openChannel(channel) {
+    setCurrentChannel(channel);
+    setChatDraft("");
+    setChannelMessages([]);
+    if (channel.type === "text") {
+      await loadChannelMessages(channel);
+    } else {
+      setNotice("O canal de voz já aparece na comunidade. Áudio ao vivo precisa da camada WebRTC, que ainda será implementada.");
+    }
+  }
+
+  async function joinCommunity(server) {
+    if (!requireUser("Entre para participar de comunidades.")) return;
+    if (!supabase) return;
+    if (myServers.some(item => item.id === server.id)) {
+      await openServer(server);
+      return;
+    }
+    setActionBusy("join-" + server.id);
+    try {
+      const { error } = await supabase.from("server_members").insert({
+        server_id: server.id,
+        user_id: user.id,
+        role: "member"
+      });
+      if (error) throw error;
+      await loadCommunities();
+      setNotice("Você entrou na comunidade " + server.name + ".");
+      await openServer(server);
+    } catch (error) {
+      setNotice("Não foi possível entrar na comunidade: " + friendlyError(error));
+    } finally {
+      setActionBusy("");
+    }
+  }
+
+  async function createCommunity(event) {
+    event.preventDefault();
+    const name = newServerName.trim();
+    const description = newServerDesc.trim();
+    if (name.length < 2 || name.length > 48) {
+      setNotice("O nome da comunidade deve ter de 2 a 48 caracteres.");
+      return;
+    }
+    if (description.length > 180) {
+      setNotice("A descrição pode ter no máximo 180 caracteres.");
+      return;
+    }
+    if (!requireUser("Entre para criar uma comunidade.")) return;
+    if (!supabase || newServerBusy) return;
+
+    setNewServerBusy(true);
+    try {
+      await ensureProfile(user);
+      const { data: serverId, error } = await supabase.rpc("create_server_with_defaults", {
+        p_name: name,
+        p_description: description,
+        p_is_public: true
+      });
+      if (error) throw error;
+      const { data: server, error: readError } = await supabase
+        .from("servers")
+        .select("id, owner_id, name, description, is_public, created_at")
+        .eq("id", serverId)
+        .single();
+      if (readError) throw readError;
+      setCommunityOpen(false);
+      setNewServerName("");
+      setNewServerDesc("");
+      await loadCommunities();
+      setNotice("Comunidade criada com canais de texto e voz.");
+      await openServer(server);
+    } catch (error) {
+      setNotice("Não foi possível criar a comunidade: " + friendlyError(error));
+    } finally {
+      setNewServerBusy(false);
+    }
+  }
+
+  async function sendChannelMessage(event) {
+    event.preventDefault();
+    const body = chatDraft.trim();
+    if (!body) {
+      setNotice("Escreva uma mensagem antes de enviar.");
+      return;
+    }
+    if (body.length > 2000) {
+      setNotice("A mensagem pode ter no máximo 2.000 caracteres.");
+      return;
+    }
+    if (!requireUser("Entre para enviar mensagens nos canais.")) return;
+    if (!supabase || !currentChannel || currentChannel.type !== "text" || chatBusy) return;
+
+    setChatBusy(true);
+    try {
+      await ensureProfile(user);
+      const { error } = await supabase.from("messages").insert({
+        channel_id: currentChannel.id,
+        author_id: user.id,
+        body
+      });
+      if (error) throw error;
+      setChatDraft("");
+      await loadChannelMessages(currentChannel);
+      setNotice("");
+    } catch (error) {
+      setNotice("Não foi possível enviar a mensagem: " + friendlyError(error));
+    } finally {
+      setChatBusy(false);
+    }
+  }
+
+  function openCommunityHub() {
+    setCurrentServer(null);
+    setCurrentChannel(null);
+    setChannelMessages([]);
+    setPage("Comunidades");
+    setNotice("");
   }
 
   async function loadReplies(post) {
@@ -543,7 +792,12 @@ export default function App() {
 
   function selectPage(label) {
     setPage(label);
-    if (label === "Mensagens") setNotice("Mensagens diretas estão planejadas para a próxima etapa.");
+    if (label === "Comunidades") {
+      setCurrentServer(null);
+      setCurrentChannel(null);
+      setChannelMessages([]);
+      setNotice("");
+    } else if (label === "Mensagens") setNotice("Mensagens diretas continuam planejadas para uma etapa própria; os canais de comunidade já terão chat de texto.");
     else if (label === "Notificações") setNotice("Notificações em tempo real serão adicionadas na próxima etapa.");
     else setNotice("");
   }
@@ -564,10 +818,11 @@ export default function App() {
       <label className="search"><Icon>⌕</Icon><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar pessoas, assuntos e posts" aria-label="Buscar" /><kbd>/</kbd></label>
       <div className="section-label">SEU ESPAÇO</div>
       {nav.map(([label, icon]) => <button key={label} className={"side-link " + (page === label ? "selected" : "")} onClick={() => selectPage(label)}><Icon>{icon}</Icon>{label}{label === "Notificações" && <span className="count">•</span>}</button>)}
-      <div className="section-row"><span className="section-label">COMUNIDADES</span><button onClick={() => setNotice("A criação de comunidades será a próxima etapa depois do feed social.")} aria-label="Adicionar comunidade">＋</button></div>
-      <button className="community" onClick={() => setNotice("Comunidades ainda são uma prévia visual; a criação e os canais serão conectados depois.")}><span className="community-icon blue">DS</span><span><b>Dev & Sistemas</b><small>Comunidade de demonstração</small></span></button>
-      <button className="community" onClick={() => setNotice("Comunidades ainda são uma prévia visual; a criação e os canais serão conectados depois.")}><span className="community-icon green">CR</span><span><b>Criadores</b><small>Comunidade de demonstração</small></span></button>
-      <button className="community" onClick={() => setNotice("Comunidades ainda são uma prévia visual; a criação e os canais serão conectados depois.")}><span className="community-icon yellow">ID</span><span><b>Ideias em debate</b><small>Comunidade de demonstração</small></span></button>
+      <div className="section-row"><span className="section-label">SUAS COMUNIDADES</span><button onClick={() => { if (user) setCommunityOpen(true); else { setAuthMode("login"); setAuthFeedback("Entre para criar sua comunidade."); setAuthOpen(true); } }} aria-label="Criar comunidade">＋</button></div>
+      {myServers.map(server => <button className="community" key={server.id} onClick={() => openServer(server)}><span className="community-icon blue">{initialsFor(server.name).slice(0, 2)}</span><span><b>{server.name}</b><small>{server.description || "Comunidade NexEl"}</small></span></button>)}
+      {!user && <p className="sidebar-community-empty">Entre para ver suas comunidades.</p>}
+      {user && myServers.length === 0 && <p className="sidebar-community-empty">{communitiesLoading ? "Carregando..." : "Você ainda não participa de comunidades."}</p>}
+      <button className="community-discover-link" onClick={openCommunityHub}><span>＋</span><b>Explorar comunidades</b></button>
       <div className="sidebar-bottom"><div className="tiny-globe">◎</div><b>Um lugar para construir.</b><p>Compartilhe ideias, encontre pessoas e participe de conversas que importam.</p></div>
     </aside>
 
@@ -583,7 +838,47 @@ export default function App() {
         </div>
       </div>
 
-      {page === "Mensagens" || page === "Notificações" ? <section className="feature-placeholder"><div className="placeholder-symbol">{page === "Mensagens" ? "▤" : "◉"}</div><h2>{page === "Mensagens" ? "Conversas privadas estão chegando" : "Notificações estão chegando"}</h2><p>O feed social já pode usar sua conta e salvar as interações no banco. Esta área será conectada na próxima etapa.</p><button className="primary-button" onClick={() => setPage("Início")}>Voltar ao feed</button></section> : <>
+      {page === "Comunidades" ? <section className="community-workspace">
+        {notice && <div className="notice" role="status"><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Fechar aviso">×</button></div>}
+        {!user ? <div className="feature-placeholder"><div className="placeholder-symbol">▦</div><h2>Encontre sua comunidade</h2><p>Entre para descobrir espaços públicos, participar de canais e conversar com pessoas.</p><button className="primary-button" onClick={() => { setAuthMode("login"); setAuthFeedback(""); setAuthOpen(true); }}>Entrar para continuar</button></div>
+        : currentServer ? <div className="server-layout">
+          <aside className="server-channel-list">
+            <div className="server-heading"><div><span className="eyebrow">COMUNIDADE</span><h2>{currentServer.name}</h2><p>{currentServer.description || "Seu espaço de conversa."}</p></div><button className="ghost-button" onClick={openCommunityHub}>Explorar</button></div>
+            <div className="channel-group-title">CANAIS</div>
+            {serverChannels.map(channel => <button key={channel.id} className={"channel-link " + (currentChannel?.id === channel.id ? "selected" : "")} onClick={() => openChannel(channel)}><span className="channel-prefix">{channel.type === "voice" ? "◖" : "#"}</span><span>{channel.name}</span>{channel.type === "voice" && <small>voz</small>}</button>)}
+            {!communitiesLoading && serverChannels.length === 0 && <p className="sidebar-community-empty">Nenhum canal disponível.</p>}
+            {currentServer.owner_id === user.id && <div className="server-owner-note">Você é a pessoa responsável por esta comunidade.</div>}
+          </aside>
+          <div className="server-chat">
+            {!currentChannel && <div className="feature-placeholder"><div className="placeholder-symbol">#</div><h2>Escolha um canal</h2><p>Selecione um canal na lista para começar.</p></div>}
+            {currentChannel?.type === "voice" && <div className="feature-placeholder voice-placeholder"><div className="placeholder-symbol">◖</div><h2>{currentChannel.name}</h2><p>Este canal já está salvo no banco. Voz ao vivo ainda depende da camada WebRTC e de sinalização segura; não vamos fingir que o áudio já está funcionando.</p><button className="ghost-button" onClick={() => { const textChannel = serverChannels.find(channel => channel.type === "text"); if (textChannel) openChannel(textChannel); }}>Ir para o chat de texto</button></div>}
+            {currentChannel?.type === "text" && <>
+              <header className="chat-header"><div><span className="chat-hash">#</span><h2>{currentChannel.name}</h2><small>{currentServer.name}</small></div><button className="icon-button" onClick={() => loadChannelMessages(currentChannel)} aria-label="Atualizar mensagens" title="Atualizar mensagens">↻</button></header>
+              <section className="chat-message-list" aria-label="Mensagens do canal">
+                {chatLoading && channelMessages.length === 0 && <div className="reply-state">Carregando mensagens...</div>}
+                {!chatLoading && channelMessages.length === 0 && <div className="reply-state"><b>Esse canal está tranquilo por enquanto.</b><p>Envie a primeira mensagem para iniciar a conversa.</p></div>}
+                {channelMessages.map(message => <article className="chat-message" key={message.id}>
+                  <Avatar initials={message.initials} />
+                  <div className="chat-message-content"><div className="chat-message-meta"><b>{message.name}</b><span>{message.handle}</span><time>{message.time}</time></div><p>{message.body}</p></div>
+                </article>)}
+              </section>
+              <form className="chat-composer" onSubmit={sendChannelMessage}>
+                <textarea aria-label="Mensagem do canal" value={chatDraft} onChange={event => setChatDraft(event.target.value)} maxLength={2000} rows={2} placeholder={"Enviar mensagem em #" + currentChannel.name} />
+                <div className="chat-composer-footer"><span>{chatDraft.length}/2000 · atualiza automaticamente</span><button type="submit" className="primary-button" disabled={chatBusy || !chatDraft.trim()}>{chatBusy ? "Enviando..." : "Enviar"} ↑</button></div>
+              </form>
+            </>}
+          </div>
+        </div> : <div className="community-discovery">
+          <div className="community-hero"><div><span className="eyebrow">NEXEL / COMUNIDADES</span><h2>Encontre seu lugar.</h2><p>Crie um espaço ou entre em uma comunidade pública para conversar em canais.</p></div><button className="primary-button" onClick={() => setCommunityOpen(true)}>＋ Criar comunidade</button></div>
+          {communitiesLoading && <div className="reply-state">Carregando comunidades...</div>}
+          <h3>Suas comunidades</h3>
+          {myServers.length === 0 && !communitiesLoading && <div className="empty community-empty"><b>Você ainda não participa de nenhuma.</b><p>Crie a sua ou entre em uma comunidade pública.</p></div>}
+          <div className="server-card-grid">{myServers.map(server => <article className="server-card" key={server.id}><span className="server-card-mark">{initialsFor(server.name).slice(0,2)}</span><h4>{server.name}</h4><p>{server.description || "Um espaço para compartilhar ideias."}</p><button className="ghost-button" onClick={() => openServer(server)}>Abrir comunidade</button></article>)}</div>
+          <h3>Comunidades públicas</h3>
+          {publicServers.length === 0 && !communitiesLoading && <div className="empty community-empty"><b>Nenhuma comunidade pública nova por enquanto.</b><p>Quando alguém criar um espaço público, ele aparecerá aqui.</p></div>}
+          <div className="server-card-grid">{publicServers.map(server => <article className="server-card" key={server.id}><span className="server-card-mark green-mark">{initialsFor(server.name).slice(0,2)}</span><h4>{server.name}</h4><p>{server.description || "Um espaço público para trocar ideias."}</p><button className="primary-button" onClick={() => joinCommunity(server)} disabled={actionBusy === "join-" + server.id}>{actionBusy === "join-" + server.id ? "Entrando..." : "Entrar na comunidade"}</button></article>)}</div>
+        </div>}
+      </section> : page === "Mensagens" || page === "Notificações" ? <section className="feature-placeholder"><div className="placeholder-symbol">{page === "Mensagens" ? "▤" : "◉"}</div><h2>{page === "Mensagens" ? "Mensagens diretas estão no roteiro" : "Notificações estão no roteiro"}</h2><p>Os canais de texto das comunidades já usam o banco. Conversas privadas e notificações terão implementação e regras de privacidade próprias.</p><button className="primary-button" onClick={() => setPage("Início")}>Voltar ao feed</button></section> : <>
         {showComposer
           ? <section className="composer"><Avatar initials={initials} /><div className="composer-body"><textarea value={draft} onChange={event => setDraft(event.target.value)} maxLength={500} placeholder="Compartilhe uma ideia, uma descoberta ou algo que te inspira..." autoFocus aria-label="Texto da publicação" /><div className="composer-footer"><span>{draft.length}/500</span><div className="composer-buttons"><button className="ghost-button" onClick={() => { setShowComposer(false); setDraft(""); }}>Cancelar</button><button className="primary-button" onClick={publish} disabled={actionBusy === "publish"}>{actionBusy === "publish" ? "Publicando..." : "Publicar"} <span>↑</span></button></div></div></div></section>
           : <button className="composer-prompt" onClick={() => setShowComposer(true)}><Avatar initials={initials} /><span><b>Vamos conversar?</b><small>Compartilhe algo que te inspira...</small></span><span className="prompt-plus">＋</span></button>}
@@ -654,6 +949,21 @@ export default function App() {
           <span className="bio-counter">{profileBio.length}/160</span>
           <button className="primary-button modal-submit" type="submit" disabled={profileBusy}>{profileBusy ? "Salvando..." : "Salvar perfil"}</button>
           <button className="ghost-button modal-logout" type="button" onClick={signOut}>Sair da conta</button>
+        </form>
+      </section>
+    </div>}
+
+    {communityOpen && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setCommunityOpen(false); }}>
+      <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="community-title">
+        <button className="modal-close" onClick={() => setCommunityOpen(false)} aria-label="Fechar">×</button>
+        <span className="eyebrow">NEXEL / NOVA COMUNIDADE</span>
+        <h2 id="community-title">Crie seu espaço.</h2>
+        <p className="modal-description">Sua comunidade começa com um canal de texto geral e um canal de voz.</p>
+        <form className="modal-form" onSubmit={createCommunity}>
+          <label>Nome da comunidade<input value={newServerName} onChange={event => setNewServerName(event.target.value)} required minLength={2} maxLength={48} placeholder="Ex.: Dev & Sistemas" /></label>
+          <label>Descrição<textarea value={newServerDesc} onChange={event => setNewServerDesc(event.target.value)} maxLength={180} rows={3} placeholder="Sobre o que é esse espaço?" /></label>
+          <small className="privacy-note">A comunidade será pública e poderá ser encontrada por outras pessoas conectadas ao NexEl.</small>
+          <button className="primary-button modal-submit" type="submit" disabled={newServerBusy}>{newServerBusy ? "Criando..." : "Criar comunidade"}</button>
         </form>
       </section>
     </div>}
