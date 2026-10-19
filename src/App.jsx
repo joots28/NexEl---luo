@@ -416,27 +416,42 @@ export default function App() {
     }
 
     let active = true;
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    let authResolved = false;
+    const initializationTimeout = window.setTimeout(() => {
+      if (!active || authResolved) return;
+      authResolved = true;
+      setNotice("A verificação da sessão demorou mais que o esperado. Você pode tentar entrar novamente ou recarregar a página.");
+      setUser(null);
+      setAuthInitialized(true);
+    }, 8000);
+
+    const finishInitialization = session => {
       if (!active) return;
+      authResolved = true;
+      window.clearTimeout(initializationTimeout);
       setUser(session?.user || null);
       setAuthInitialized(true);
+    };
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      finishInitialization(session);
     });
 
     supabase.auth.getSession()
       .then(({ data, error }) => {
         if (!active) return;
         if (error) setNotice(friendlyError(error));
-        setUser(data.session?.user || null);
-        setAuthInitialized(true);
+        finishInitialization(data?.session || null);
       })
       .catch(error => {
         if (!active) return;
         setNotice("Não consegui verificar sua sessão: " + friendlyError(error));
-        setAuthInitialized(true);
+        finishInitialization(null);
       });
 
     return () => {
       active = false;
+      window.clearTimeout(initializationTimeout);
       listener.subscription.unsubscribe();
     };
   }, []);
