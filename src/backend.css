@@ -55,3 +55,36 @@
 @media(max-width:820px){.auth-gate-content{padding:23px 22px 18px}.auth-gate-layout{grid-template-columns:minmax(0,1fr) minmax(300px,390px);gap:28px;padding:45px 0}.auth-gate-story h1{font-size:clamp(34px,5vw,46px);letter-spacing:-1.5px}.auth-gate-card{padding:23px}}
 @media(max-width:680px){.auth-gate-content{padding:20px 15px 16px}.gate-header-note{font-size:9px}.auth-gate-layout{grid-template-columns:minmax(0,1fr);gap:25px;padding:34px 0 28px}.auth-gate-story{max-width:510px}.auth-gate-story h1{font-size:clamp(34px,10vw,47px);letter-spacing:-1.4px;margin:14px 0}.auth-gate-story>p{font-size:12px;line-height:1.7}.auth-gate-benefits{grid-template-columns:1fr;gap:12px;margin-top:20px}.auth-gate-benefits>div{gap:10px}.benefit-icon{width:34px;height:34px;flex-basis:34px}.auth-gate-story .auth-gate-privacy{margin-top:18px;font-size:9px}.auth-gate-card{max-width:470px;justify-self:center;padding:22px 19px;border-radius:18px}.auth-gate-card h2{font-size:24px}.auth-gate-footer{font-size:8px;gap:8px}.auth-gate-footer span:last-child{width:100%}}
 @media(prefers-reduced-motion:reduce){.oauth-button{transition:none}}
+
+
+/* Recovery UI: keep a runtime error from appearing as an empty gray screen. */
+.nexel-error-fallback {
+  min-height: 100vh;
+  min-height: 100svh;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 14px;
+  padding: 28px 20px;
+  background: #071321;
+  color: #e9f2f8;
+  text-align: center;
+}
+.nexel-error-mark {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 15px;
+  background: linear-gradient(145deg, #2f8ee5, #35d17d);
+  color: #071321;
+  font: 800 27px 'Space Grotesk', sans-serif;
+  letter-spacing: -2px;
+}
+.nexel-error-mark span { color: #fff; }
+.nexel-error-fallback .eyebrow { color: #78bdf6; letter-spacing: 2px; font-size: 10px; margin: 4px 0 0; }
+.nexel-error-fallback h1 { max-width: 520px; font: 650 clamp(24px, 5vw, 36px) 'Space Grotesk', sans-serif; margin: 0; }
+.nexel-error-fallback p:not(.eyebrow) { max-width: 440px; color: #91aabd; font-size: 14px; line-height: 1.7; margin: 0; }
+.nexel-error-fallback button { border: 0; border-radius: 10px; padding: 12px 18px; background: #35d17d; color: #071321; font-weight: 750; cursor: pointer; margin-top: 6px; }
