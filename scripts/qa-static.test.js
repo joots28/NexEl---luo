@@ -73,3 +73,20 @@ test("environment template is tracked and local secrets are ignored", () => {
   assert.ok(existsSync(new URL("../.env.example", import.meta.url)));
   assert.match(read("../.gitignore"), /\.env\.\*/);
 });
+
+
+test("guest content gate and OAuth sign-in providers are implemented", () => {
+  const app = read("../src/App.jsx");
+  const migration = read("../supabase/migrations/20261019025448_require_authenticated_to_read_social_content.sql");
+  assert.match(app, /authInitialized/);
+  assert.match(app, /if \(!user\) \{/);
+  assert.match(app, /signInWithOAuth/);
+  assert.match(app, /signInWithProvider\("github"\)/);
+  assert.match(app, /signInWithProvider\("google"\)/);
+  assert.match(app, /Continuar com GitHub/);
+  assert.match(app, /Continuar com Google/);
+  assert.match(app, /OU USE SEU E-MAIL/);
+  assert.match(migration, /create policy social_posts_read_authenticated/i);
+  assert.match(migration, /for select\s+to authenticated/i);
+  assert.doesNotMatch(migration, /to anon/i);
+});
