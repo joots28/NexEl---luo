@@ -4,7 +4,7 @@
 
 ## Estado desta versão
 
-A prévia pública agora está conectada ao projeto Supabase NexEl. As funcionalidades de cadastro/login, perfil, feed público, publicação de texto, curtidas, reposts, favoritos e seguir pessoas usam o banco remoto. As ações sociais exigem uma conta e respeitam as políticas de Row Level Security (RLS) do Supabase.
+A prévia pública agora está conectada ao projeto Supabase NexEl. As funcionalidades de cadastro e login, perfil, feed público, publicação de texto, curtidas, reposts, favoritos e seguir pessoas usam o banco remoto. As ações sociais exigem uma conta e respeitam as políticas de Row Level Security (RLS) do Supabase.
 
 **Ainda não considerar prontos:** mensagens privadas, notificações em tempo real, comunidades/canais persistentes, moderação avançada, bots e voz/vídeo. Essas partes serão implementadas em etapas próprias e precisam de testes antes de serem anunciadas como concluídas.
 
