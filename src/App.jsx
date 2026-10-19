@@ -889,6 +889,15 @@ export default function App() {
       return;
     }
     setProfileOpen(false);
+    setDmCurrent(null);
+    setDmMessages([]);
+    setDmContacts([]);
+    setMyServers([]);
+    setPublicServers([]);
+    setCurrentServer(null);
+    setServerChannels([]);
+    setCurrentChannel(null);
+    setChannelMessages([]);
     setNotice("Você saiu da sua conta.");
   }
 
