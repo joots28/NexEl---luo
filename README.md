@@ -22,7 +22,7 @@ A prévia pública agora está conectada ao projeto Supabase NexEl. As funcional
 - Criação de perfil e edição de nome, usuário e bio
 - Feed público carregado do banco
 - Publicações de texto de até 500 caracteres
-- Curtidas, reposts, favoritos e seguir/deixar de seguir persistidos no banco
+- Curtidas, reposts, respostas (até 300 caracteres), favoritos e seguir/deixar de seguir persistidos no banco
 - Contadores de curtidas, respostas e reposts calculados a partir dos registros existentes
 - Busca por pessoas, conteúdo e tópico
 - Feed de itens salvos vinculado à conta
@@ -53,7 +53,7 @@ npm run dev
 2. Testar RLS com duas contas independentes e tentativas negativas.
 3. Resolver o aviso do Advisor relativo à função SECURITY DEFINER `accept_server_invite` antes de ativar convites de comunidades.
 4. Adicionar testes automatizados que executem contra um projeto de teste isolado.
-5. Implementar respostas, notificações, bloqueios, denúncias, limites contra spam e ferramentas de moderação.
+5. Implementar notificações, bloqueios, denúncias, limites contra spam e ferramentas de moderação.
 6. Construir comunidades, canais e mensagens com suas regras de acesso.
 7. Implementar voz/vídeo com infraestrutura própria e testes específicos de qualidade e privacidade.
 
