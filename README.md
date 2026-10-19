@@ -32,6 +32,10 @@ A prévia pública está conectada ao projeto Supabase NexEl. A rede social exig
 - Descoberta e entrada em comunidades públicas; lista das comunidades das quais a pessoa participa
 - Chat de texto persistente por canal com atualização automática, limite de 2.000 caracteres e controle de acesso RLS
 - Mensagens privadas entre duas contas, com acesso restrito a quem envia ou recebe, validação de identidade e limite de 2.000 caracteres
+- NexEl Dev Academy: questionário de perfil de aprendizagem, recomendações determinísticas por assunto/nível/objetivo e mini-desafios interativos de lógica com histórico no banco
+- Solicitação de verificação de professor revisada manualmente; só perfis aprovados podem enviar vídeos
+- Biblioteca de vídeo privada (MP4/WebM/MOV, até 50 MB por vídeo no plano gratuito), com revisão administrativa antes de publicar
+- Mural de ajuda no estilo Q&A: perguntas, respostas, votos positivos/negativos e marcação da resposta aceita
 - Feedback de erros, estado de carregamento e layout adaptável
 
 ## Executar localmente
@@ -53,17 +57,28 @@ npm run dev
 4. Configure a URL pública do site em **Authentication → URL Configuration** no Supabase. Adicione `https://nexel-social.onrender.com` às Redirect URLs permitidas; mantenha a URL local de desenvolvimento se necessário. Com confirmação de e-mail habilitada, o usuário precisa confirmar o endereço antes do primeiro login.
 5. Para Google e GitHub, crie uma OAuth App em cada provedor, copie o Client ID/Client Secret para **Authentication → Sign In / Providers** e ative cada provedor. Use como callback OAuth do provedor a URL informada pelo próprio Supabase, no formato `https://<project-ref>.supabase.co/auth/v1/callback`. Não coloque os segredos no código do frontend.
 6. Mantenha RLS habilitado. As políticas existentes restringem gravações ao usuário autenticado e seus próprios registros.
+7. Para ativar a revisão interna de docentes e vídeos, crie sua conta NexEl e depois cadastre a primeira conta administradora no SQL Editor do Supabase. Substitua o texto de exemplo pelo e-mail real usado na conta:
+   ```sql
+   insert into public.platform_admins (user_id)
+   select id from auth.users
+   where lower(email) = lower('SEU_EMAIL_DO_NEXEL')
+   on conflict do nothing;
+   ```
+   Somente execute esse comando para uma conta administradora que você controla. A tabela não permite que usuários se promovam pelo site.
+8. Os vídeos ficam em um bucket privado. O limite por arquivo está configurado em 50 MB; professores precisam ser verificados e cada aula passa por aprovação antes de ficar disponível.
 
 ## Próximos gates antes de ampliar o lançamento
 
 1. Testar cadastro, confirmação de e-mail, login e saída no site publicado.
 2. Ativar e validar o OAuth de Google e GitHub com credenciais próprias do projeto.
-3. Testar RLS com duas contas independentes, tentativas anônimas e tentativas negativas.
-4. Resolver o aviso do Advisor relativo à função SECURITY DEFINER `accept_server_invite` antes de ativar convites de comunidades.
-5. Adicionar testes automatizados que executem contra um projeto de teste isolado.
-6. Implementar notificações, bloqueios, denúncias, limites contra spam e ferramentas de moderação.
-7. Adicionar criação/gestão de canais personalizados e convites seguros; implementar notificações e recibos de leitura das mensagens privadas.
-8. Implementar voz/vídeo com infraestrutura própria e testes específicos de qualidade e privacidade.
+3. Cadastrar a primeira conta em `platform_admins` por SQL e testar a revisão de professores e aulas.
+4. Testar a segurança RLS com duas contas independentes, incluindo tentativas anônimas e tentativa de enviar vídeo como conta comum.
+5. Fazer teste real de upload e reprodução de vídeo em celular com arquivos dentro do limite de 50 MB.
+6. Resolver o aviso do Advisor relativo à função SECURITY DEFINER `accept_server_invite` antes de ativar convites de comunidades.
+7. Adicionar testes de integração contra um projeto de teste isolado.
+8. Implementar notificações, bloqueios, denúncias, limites contra spam e ferramentas de moderação.
+9. Adicionar criação/gestão de canais personalizados e convites seguros; implementar notificações e recibos de leitura das mensagens privadas.
+10. Implementar voz/vídeo com infraestrutura própria e testes específicos de qualidade e privacidade.
 
 ## Identidade visual
 
