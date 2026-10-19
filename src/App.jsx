@@ -83,6 +83,14 @@ export default function App() {
   const [newServerName, setNewServerName] = useState("");
   const [newServerDesc, setNewServerDesc] = useState("");
   const [newServerBusy, setNewServerBusy] = useState(false);
+  const [dmContacts, setDmContacts] = useState([]);
+  const [dmSearch, setDmSearch] = useState("");
+  const [dmCurrent, setDmCurrent] = useState(null);
+  const [dmMessages, setDmMessages] = useState([]);
+  const [dmDraft, setDmDraft] = useState("");
+  const [dmInboxLoading, setDmInboxLoading] = useState(false);
+  const [dmThreadLoading, setDmThreadLoading] = useState(false);
+  const [dmBusy, setDmBusy] = useState(false);
 
   const nav = [
     ["Início", "⌂"],
@@ -297,6 +305,98 @@ export default function App() {
     }
   }, []);
 
+  const loadDirectContacts = useCallback(async () => {
+    if (!supabase || !user?.id) {
+      setDmContacts([]);
+      return;
+    }
+    setDmInboxLoading(true);
+    try {
+      const [messagesResult, profilesResult] = await Promise.all([
+        supabase.from("direct_messages")
+          .select("id, sender_id, recipient_id, body, created_at")
+          .or("sender_id.eq." + user.id + ",recipient_id.eq." + user.id)
+          .order("created_at", { ascending: false })
+          .limit(500),
+        supabase.from("profiles")
+          .select("id, username, display_name, avatar_url")
+          .neq("id", user.id)
+          .order("display_name", { ascending: true })
+          .limit(200)
+      ]);
+      if (messagesResult.error) throw messagesResult.error;
+      if (profilesResult.error) throw profilesResult.error;
+
+      const latestByPartner = new Map();
+      for (const message of messagesResult.data || []) {
+        const partnerId = message.sender_id === user.id ? message.recipient_id : message.sender_id;
+        if (!latestByPartner.has(partnerId)) latestByPartner.set(partnerId, message);
+      }
+      const contacts = (profilesResult.data || []).map(person => {
+        const latest = latestByPartner.get(person.id);
+        const name = person.display_name || person.username || "Pessoa usuária";
+        return {
+          id: person.id,
+          name,
+          handle: person.username ? "@" + person.username : "@usuario",
+          initials: initialsFor(name),
+          avatarUrl: person.avatar_url || "",
+          latestBody: latest?.body || "",
+          latestAt: latest?.created_at || "",
+          latestTime: latest?.created_at ? timeAgo(latest.created_at) : ""
+        };
+      });
+      contacts.sort((a, b) => {
+        if (a.latestAt && b.latestAt) return new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime();
+        if (a.latestAt) return -1;
+        if (b.latestAt) return 1;
+        return a.name.localeCompare(b.name, "pt-BR");
+      });
+      setDmContacts(contacts);
+    } catch (error) {
+      setNotice("Não consegui carregar as conversas: " + friendlyError(error));
+    } finally {
+      setDmInboxLoading(false);
+    }
+  }, [user?.id]);
+
+  const loadDirectThread = useCallback(async (person) => {
+    if (!supabase || !user?.id || !person?.id) {
+      setDmMessages([]);
+      return;
+    }
+    setDmThreadLoading(true);
+    try {
+      const pairFilter =
+        "and(sender_id.eq." + user.id + ",recipient_id.eq." + person.id + ")," +
+        "and(sender_id.eq." + person.id + ",recipient_id.eq." + user.id + ")";
+      const { data, error } = await supabase.from("direct_messages")
+        .select("id, sender_id, recipient_id, body, created_at")
+        .or(pairFilter)
+        .order("created_at", { ascending: true })
+        .limit(300);
+      if (error) throw error;
+
+      const myName = profile?.display_name || (user.email || "Você").split("@")[0];
+      setDmMessages((data || []).map(message => {
+        const own = message.sender_id === user.id;
+        const name = own ? myName : person.name;
+        return {
+          ...message,
+          own,
+          name,
+          initials: initialsFor(name),
+          time: timeAgo(message.created_at)
+        };
+      }));
+    } catch (error) {
+      setNotice("Não consegui carregar a conversa: " + friendlyError(error));
+      setDmMessages([]);
+    } finally {
+      setDmThreadLoading(false);
+    }
+  }, [user?.id, user?.email, profile?.display_name]);
+
   useEffect(() => {
     if (!supabase) return undefined;
     let active = true;
@@ -335,6 +435,16 @@ export default function App() {
   useEffect(() => {
     loadCommunities();
   }, [loadCommunities]);
+
+  useEffect(() => {
+    loadDirectContacts();
+  }, [loadDirectContacts]);
+
+  useEffect(() => {
+    if (page !== "Mensagens" || !dmCurrent || !user?.id) return undefined;
+    const interval = window.setInterval(() => loadDirectThread(dmCurrent), 10000);
+    return () => window.clearInterval(interval);
+  }, [page, dmCurrent?.id, user?.id, loadDirectThread]);
 
   useEffect(() => {
     if (page !== "Comunidades" || !currentChannel || currentChannel.type !== "text") return undefined;
@@ -572,6 +682,45 @@ export default function App() {
     }
   }
 
+  async function openDirectThread(person) {
+    setDmCurrent(person);
+    setDmMessages([]);
+    setDmDraft("");
+    setPage("Mensagens");
+    setNotice("");
+    await loadDirectThread(person);
+  }
+
+  async function sendDirectMessage(event) {
+    event.preventDefault();
+    const body = dmDraft.trim();
+    if (!body) return;
+    if (body.length > 2000) {
+      setNotice("A mensagem privada pode ter no máximo 2.000 caracteres.");
+      return;
+    }
+    if (!requireUser("Entre para enviar mensagens privadas.")) return;
+    if (!supabase || !dmCurrent || dmBusy) return;
+
+    setDmBusy(true);
+    try {
+      await ensureProfile(user);
+      const { error } = await supabase.from("direct_messages").insert({
+        sender_id: user.id,
+        recipient_id: dmCurrent.id,
+        body
+      });
+      if (error) throw error;
+      setDmDraft("");
+      setNotice("");
+      await Promise.all([loadDirectThread(dmCurrent), loadDirectContacts()]);
+    } catch (error) {
+      setNotice("Não foi possível enviar a mensagem privada: " + friendlyError(error));
+    } finally {
+      setDmBusy(false);
+    }
+  }
+
   async function sendChannelMessage(event) {
     event.preventDefault();
     const body = chatDraft.trim();
@@ -740,6 +889,15 @@ export default function App() {
       return;
     }
     setProfileOpen(false);
+    setDmCurrent(null);
+    setDmMessages([]);
+    setDmContacts([]);
+    setMyServers([]);
+    setPublicServers([]);
+    setCurrentServer(null);
+    setServerChannels([]);
+    setCurrentChannel(null);
+    setChannelMessages([]);
     setNotice("Você saiu da sua conta.");
   }
 
@@ -878,7 +1036,43 @@ export default function App() {
           {publicServers.length === 0 && !communitiesLoading && <div className="empty community-empty"><b>Nenhuma comunidade pública nova por enquanto.</b><p>Quando alguém criar um espaço público, ele aparecerá aqui.</p></div>}
           <div className="server-card-grid">{publicServers.map(server => <article className="server-card" key={server.id}><span className="server-card-mark green-mark">{initialsFor(server.name).slice(0,2)}</span><h4>{server.name}</h4><p>{server.description || "Um espaço público para trocar ideias."}</p><button className="primary-button" onClick={() => joinCommunity(server)} disabled={actionBusy === "join-" + server.id}>{actionBusy === "join-" + server.id ? "Entrando..." : "Entrar na comunidade"}</button></article>)}</div>
         </div>}
-      </section> : page === "Mensagens" || page === "Notificações" ? <section className="feature-placeholder"><div className="placeholder-symbol">{page === "Mensagens" ? "▤" : "◉"}</div><h2>{page === "Mensagens" ? "Mensagens diretas estão no roteiro" : "Notificações estão no roteiro"}</h2><p>Os canais de texto das comunidades já usam o banco. Conversas privadas e notificações terão implementação e regras de privacidade próprias.</p><button className="primary-button" onClick={() => setPage("Início")}>Voltar ao feed</button></section> : <>
+      </section> : page === "Mensagens" ? <section className="dm-workspace">
+        {notice && <div className="notice" role="status"><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Fechar aviso">×</button></div>}
+        {!user ? <div className="feature-placeholder"><div className="placeholder-symbol">▤</div><h2>Converse em particular</h2><p>Entre para ver as pessoas do NexEl e enviar mensagens privadas. Só você e a pessoa destinatária podem ler a conversa.</p><button className="primary-button" onClick={() => { setAuthMode("login"); setAuthFeedback(""); setAuthOpen(true); }}>Entrar para continuar</button></div>
+        : <div className="dm-layout">
+          <aside className="dm-contacts">
+            <header className="dm-contacts-header"><div><span className="eyebrow">NEXEL / PRIVADO</span><h2>Mensagens</h2></div><button className="icon-button" onClick={loadDirectContacts} aria-label="Atualizar pessoas" title="Atualizar pessoas">↻</button></header>
+            <label className="dm-search"><Icon>⌕</Icon><input value={dmSearch} onChange={event => setDmSearch(event.target.value)} placeholder="Buscar pessoas..." aria-label="Buscar pessoas" /></label>
+            <div className="dm-contact-list">
+              {dmInboxLoading && dmContacts.length === 0 && <div className="reply-state">Carregando pessoas...</div>}
+              {!dmInboxLoading && dmContacts.filter(person => (person.name + " " + person.handle).toLowerCase().includes(dmSearch.trim().toLowerCase())).length === 0 && <div className="reply-state">{dmSearch.trim() ? "Nenhuma pessoa encontrada." : "Ainda não há outras pessoas cadastradas."}</div>}
+              {dmContacts.filter(person => (person.name + " " + person.handle).toLowerCase().includes(dmSearch.trim().toLowerCase())).map(person => <button key={person.id} className={"dm-contact " + (dmCurrent?.id === person.id ? "selected" : "")} onClick={() => openDirectThread(person)}>
+                <Avatar initials={person.initials} />
+                <span className="dm-contact-copy"><b>{person.name}</b><small>{person.latestBody || person.handle}</small></span>
+                {person.latestTime && <time>{person.latestTime}</time>}
+              </button>)}
+            </div>
+            <p className="dm-privacy-note">Mensagens privadas usam regras de acesso no banco. A lista mostra perfis públicos para iniciar uma conversa.</p>
+          </aside>
+          <div className="dm-thread">
+            {!dmCurrent ? <div className="feature-placeholder"><div className="placeholder-symbol">✉</div><h2>Escolha uma conversa</h2><p>Selecione uma pessoa para abrir ou começar uma conversa privada.</p></div> : <>
+              <header className="dm-thread-header"><Avatar initials={dmCurrent.initials} /><div><b>{dmCurrent.name}</b><small>{dmCurrent.handle}</small></div><button className="icon-button" onClick={() => loadDirectThread(dmCurrent)} aria-label="Atualizar conversa" title="Atualizar conversa">↻</button></header>
+              <section className="dm-message-list" aria-label="Mensagens privadas">
+                {dmThreadLoading && dmMessages.length === 0 && <div className="reply-state">Carregando conversa...</div>}
+                {!dmThreadLoading && dmMessages.length === 0 && <div className="reply-state"><b>Essa conversa começa com você.</b><p>Envie uma mensagem para iniciar o papo.</p></div>}
+                {dmMessages.map(message => <article key={message.id} className={"dm-message " + (message.own ? "own" : "")}>
+                  {!message.own && <Avatar initials={message.initials} />}
+                  <div className="dm-bubble"><div className="dm-message-meta"><b>{message.own ? "Você" : message.name}</b><time>{message.time}</time></div><p>{message.body}</p></div>
+                </article>)}
+              </section>
+              <form className="dm-composer" onSubmit={sendDirectMessage}>
+                <textarea aria-label="Mensagem privada" value={dmDraft} onChange={event => setDmDraft(event.target.value)} maxLength={2000} rows={2} placeholder={"Mensagem para " + dmCurrent.name + "..."} />
+                <div className="chat-composer-footer"><span>{dmDraft.length}/2000 · atualização automática</span><button type="submit" className="primary-button" disabled={dmBusy || !dmDraft.trim()}>{dmBusy ? "Enviando..." : "Enviar"} ↑</button></div>
+              </form>
+            </>}
+          </div>
+        </div>}
+      </section> : page === "Notificações" ? <section className="feature-placeholder"><div className="placeholder-symbol">◉</div><h2>Notificações estão no roteiro</h2><p>As publicações, respostas e mensagens já são persistidas. O centro de notificações e alertas em tempo real serão implementados com regras próprias.</p><button className="primary-button" onClick={() => setPage("Início")}>Voltar ao feed</button></section> : <>
         {showComposer
           ? <section className="composer"><Avatar initials={initials} /><div className="composer-body"><textarea value={draft} onChange={event => setDraft(event.target.value)} maxLength={500} placeholder="Compartilhe uma ideia, uma descoberta ou algo que te inspira..." autoFocus aria-label="Texto da publicação" /><div className="composer-footer"><span>{draft.length}/500</span><div className="composer-buttons"><button className="ghost-button" onClick={() => { setShowComposer(false); setDraft(""); }}>Cancelar</button><button className="primary-button" onClick={publish} disabled={actionBusy === "publish"}>{actionBusy === "publish" ? "Publicando..." : "Publicar"} <span>↑</span></button></div></div></div></section>
           : <button className="composer-prompt" onClick={() => setShowComposer(true)}><Avatar initials={initials} /><span><b>Vamos conversar?</b><small>Compartilhe algo que te inspira...</small></span><span className="prompt-plus">＋</span></button>}
