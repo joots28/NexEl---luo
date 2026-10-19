@@ -37,10 +37,13 @@ test("email signup and password login use Supabase Auth", () => {
 
 test("social interactions persist to database tables", () => {
   const app = read("../src/App.jsx");
-  for (const table of ["social_post_likes", "social_post_reposts", "social_post_bookmarks", "social_follows"]) {
+  for (const table of ["social_post_likes", "social_post_reposts", "social_post_bookmarks", "social_follows", "social_post_replies"]) {
     assert.ok(app.includes(table), "missing Supabase operation for " + table);
   }
   assert.match(app, /from\("profiles"\)/);
+  assert.match(app, /from\("social_post_replies"\)\.insert/);
+  assert.match(app, /aria-labelledby="replies-title"/);
+  assert.match(app, /body\.length > 300/);
 });
 
 test("README distinguishes connected social features from planned features", () => {
