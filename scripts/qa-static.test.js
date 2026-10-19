@@ -90,3 +90,55 @@ test("guest content gate and OAuth sign-in providers are implemented", () => {
   assert.match(migration, /for select\s+to authenticated/i);
   assert.doesNotMatch(migration, /to anon/i);
 });
+
+
+test("learning hub requires signed-in access and recommends lessons from learner profile", () => {
+  const app = read("../src/App.jsx");
+  const hub = read("../src/components/LearningHub.jsx");
+  const css = read("../src/education.css");
+  assert.match(app, /<LearningHub user={user} \/>/);
+  assert.match(app, /\["Aprender",/);
+  assert.match(hub, /from\("learning_profiles"\)/);
+  assert.match(hub, /scoreVideo/);
+  assert.match(hub, /questionnaire_completed/);
+  assert.match(hub, /from\("learning_challenge_attempts"\)\.insert/);
+  assert.match(css, /\.learning-page/);
+});
+
+test("teacher-only video upload is enforced by database and private storage", () => {
+  const migration = read("../supabase/migrations/20261019030000_nexel_learning_hub_teacher_verification_and_help_forum.sql");
+  const cleanupMigration = read("../supabase/migrations/20261019030600_nexel_allow_cleanup_untracked_learning_video_uploads.sql");
+  const hub = read("../src/components/LearningHub.jsx");
+  assert.match(migration, /create table if not exists public\.teacher_verification_requests/i);
+  assert.match(migration, /create table if not exists public\.platform_admins/i);
+  assert.match(migration, /learning_videos_insert_verified_teacher/i);
+  assert.match(migration, /status = 'pending_review'/i);
+  assert.match(migration, /values \('learning-videos', 'learning-videos', false, 52428800/i);
+  assert.match(migration, /video\/mp4/);
+  assert.match(hub, /Somente professores verificados podem enviar vídeos/);
+  assert.match(hub, /50 \* 1024 \* 1024/);
+  assert.match(hub, /reviewVideo/);
+  assert.match(cleanupMigration, /not exists \(select 1 from public\.learning_videos/i);
+});
+
+test("developer help forum stores questions, answers, votes and accepted solutions", () => {
+  const forum = read("../src/components/HelpForum.jsx");
+  const migration = read("../supabase/migrations/20261019030000_nexel_learning_hub_teacher_verification_and_help_forum.sql");
+  const safetyMigration = read("../supabase/migrations/20261019030500_nexel_protect_help_answer_acceptance_and_authorship.sql");
+  assert.match(forum, /from\("help_questions"\)\.insert/);
+  assert.match(forum, /from\("help_answers"\)\.insert/);
+  assert.match(forum, /from\("help_question_votes"\)/);
+  assert.match(forum, /Marcar como solução/);
+  assert.match(migration, /enable row level security/i);
+  assert.match(safetyMigration, /guard_help_answer_update/i);
+  assert.match(safetyMigration, /A resposta não pode ser transferida/i);
+});
+
+test("README describes the education area and platform admin bootstrap", () => {
+  const readme = read("../README.md");
+  assert.match(readme, /Dev Academy/i);
+  assert.match(readme, /professores verificados/i);
+  assert.match(readme, /Mural de ajuda/i);
+  assert.match(readme, /platform_admins/i);
+  assert.match(readme, /50 MB/i);
+});
