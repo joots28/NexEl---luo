@@ -1,0 +1,10 @@
+{
+  "name": "NexEl",
+  "short_name": "NexEl",
+  "description": "Ideias que conectam.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#071321",
+  "theme_color": "#071321",
+  "icons": []
+}
