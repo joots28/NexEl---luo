@@ -1,10 +1,6 @@
-import { useMemo, useState } from "react";
-
-const seed = [
-  { id: 1, name: "Isabela Moura", handle: "@isabelacria", initials: "IM", time: "12 min", tag: "Criatividade", body: "Você não precisa ter todas as respostas para dar o próximo passo. Às vezes, só precisa começar e aprender no caminho.", likes: 28, replies: 6, reposts: 4, liked: false },
-  { id: 2, name: "Caio Nascimento", handle: "@caio.dev", initials: "CN", time: "35 min", tag: "Desenvolvimento", body: "Hoje tirei uma ideia do papel e finalmente vi a primeira versão funcionando. Dividir o problema em partes pequenas fez toda a diferença.", likes: 43, replies: 9, reposts: 7, liked: false },
-  { id: 3, name: "Beatriz Lima", handle: "@bia.ux", initials: "BL", time: "1 h", tag: "Design & UX", body: "Uma interface boa não precisa gritar para chamar atenção. Hierarquia, espaço e consistência fazem o conteúdo respirar.", likes: 67, replies: 12, reposts: 11, liked: false }
-];
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { isSupabaseConfigured, supabase } from "./lib/supabaseClient";
+import "./backend.css";
 
 const trends = [
   ["Desenvolvimento", "#BuildInPublic", "+24%"],
@@ -12,101 +8,570 @@ const trends = [
   ["Criatividade", "Feito em conjunto", "+11%"]
 ];
 
-function Icon({ children }) { return <span className="icon" aria-hidden="true">{children}</span>; }
-function Avatar({ initials, color = "" }) { return <span className={`avatar ${color}`}>{initials}</span>; }
+function Icon({ children }) {
+  return <span className="icon" aria-hidden="true">{children}</span>;
+}
+
+function Avatar({ initials, color = "" }) {
+  return <span className={"avatar " + color}>{initials || "NX"}</span>;
+}
+
+function initialsFor(name = "") {
+  return name.trim().split(/\s+/).slice(0, 2).map(part => part[0] || "").join("").toUpperCase() || "NX";
+}
+
+function timeAgo(value) {
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  if (seconds < 60) return "agora";
+  if (seconds < 3600) return Math.floor(seconds / 60) + " min";
+  if (seconds < 86400) return Math.floor(seconds / 3600) + " h";
+  if (seconds < 604800) return Math.floor(seconds / 86400) + " d";
+  return new Date(value).toLocaleDateString("pt-BR");
+}
+
+function friendlyError(error) {
+  const message = error?.message || "Não foi possível concluir a operação.";
+  if (/duplicate key|unique constraint/i.test(message)) return "Esse nome de usuário já está em uso. Escolha outro.";
+  if (/invalid login credentials/i.test(message)) return "E-mail ou senha incorretos.";
+  if (/email not confirmed/i.test(message)) return "Confirme seu e-mail antes de entrar.";
+  if (/row-level security|violates row-level security/i.test(message)) return "O banco bloqueou essa ação por segurança. Confira as políticas de acesso.";
+  return message;
+}
 
 export default function App() {
-  const [posts, setPosts] = useState(seed);
+  const [posts, setPosts] = useState([]);
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState("Para você");
   const [page, setPage] = useState("Início");
   const [notice, setNotice] = useState("");
   const [following, setFollowing] = useState([]);
-  const [saved, setSaved] = useState([]);
-  const [reposts, setReposts] = useState([]);
+  const [savedIds, setSavedIds] = useState([]);
   const [showComposer, setShowComposer] = useState(false);
-
-  const visiblePosts = useMemo(() => posts.filter(p =>
-    `${p.name} ${p.handle} ${p.body} ${p.tag}`.toLowerCase().includes(query.toLowerCase())
-  ).filter(p => page !== "Salvos" || saved.includes(p.id)), [posts, query, page, saved]);
-
-  function publish() {
-    const body = draft.trim();
-    if (!body) { setNotice("Escreva algo antes de publicar."); return; }
-    if (body.length > 500) { setNotice("Sua publicação pode ter no máximo 500 caracteres."); return; }
-    setPosts([{ id: Date.now(), name: "Jonathan Otiniel", handle: "@joots28", initials: "JO", time: "agora", tag: "Comunidade", body, likes: 0, replies: 0, reposts: 0, liked: false }, ...posts]);
-    setDraft(""); setShowComposer(false); setPage("Início"); setNotice("Publicação adicionada nesta prévia local.");
-  }
-
-  function toggleLike(id) {
-    setPosts(posts.map(p => p.id === id ? { ...p, liked: !p.liked, likes: p.likes + (p.liked ? -1 : 1) } : p));
-  }
-  function toggleFollow(handle) {
-    setFollowing(old => old.includes(handle) ? old.filter(x => x !== handle) : [...old, handle]);
-  }
-  function toggleSave(id) {
-    setSaved(old => old.includes(id) ? old.filter(x => x !== id) : [...old, id]);
-    setNotice(saved.includes(id) ? "Publicação removida dos salvos." : "Publicação salva nesta prévia local.");
-  }
-  function toggleRepost(id) {
-    setReposts(old => old.includes(id) ? old.filter(x => x !== id) : [...old, id]);
-    setNotice(reposts.includes(id) ? "Repost desfeito nesta prévia." : "Repost registrado nesta prévia local.");
-  }
+  const [loadingFeed, setLoadingFeed] = useState(true);
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState("login");
+  const [authName, setAuthName] = useState("");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authFeedback, setAuthFeedback] = useState("");
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [profileUsername, setProfileUsername] = useState("");
+  const [profileBio, setProfileBio] = useState("");
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [actionBusy, setActionBusy] = useState("");
 
   const nav = [
-    ["Início", "⌂"], ["Explorar", "⌕"], ["Notificações", "◉"], ["Mensagens", "▤"], ["Salvos", "◇"]
+    ["Início", "⌂"],
+    ["Explorar", "⌕"],
+    ["Notificações", "◉"],
+    ["Mensagens", "▤"],
+    ["Salvos", "◇"]
   ];
+
+  async function ensureProfile(account) {
+    if (!supabase || !account) return null;
+
+    const { data: existing, error: readError } = await supabase
+      .from("profiles")
+      .select("id, username, display_name, bio, avatar_url")
+      .eq("id", account.id)
+      .maybeSingle();
+
+    if (readError) throw readError;
+    if (existing) return existing;
+
+    const emailName = (account.email || "usuario").split("@")[0]
+      .toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20);
+    const base = emailName.length >= 3 ? emailName : "usuario";
+    const username = (base + "_" + account.id.replace(/-/g, "").slice(0, 8)).slice(0, 32);
+    const displayName = String(
+      account.user_metadata?.display_name ||
+      account.user_metadata?.full_name ||
+      (account.email || "Pessoa usuária").split("@")[0]
+    ).trim().slice(0, 80) || "Pessoa usuária";
+
+    const { data: created, error: createError } = await supabase
+      .from("profiles")
+      .insert({ id: account.id, username, display_name: displayName, bio: "" })
+      .select("id, username, display_name, bio, avatar_url")
+      .single();
+
+    if (createError) {
+      const { data: retry, error: retryError } = await supabase
+        .from("profiles")
+        .select("id, username, display_name, bio, avatar_url")
+        .eq("id", account.id)
+        .maybeSingle();
+      if (retryError || !retry) throw createError;
+      return retry;
+    }
+    return created;
+  }
+
+  const refreshFeed = useCallback(async () => {
+    if (!supabase) {
+      setPosts([]);
+      setSavedIds([]);
+      setFollowing([]);
+      setLoadingFeed(false);
+      return;
+    }
+
+    setLoadingFeed(true);
+    try {
+      const { data: rows, error } = await supabase
+        .from("social_posts")
+        .select("id, author_id, body, topic, created_at")
+        .order("created_at", { ascending: false })
+        .limit(80);
+
+      if (error) throw error;
+      const postRows = rows || [];
+      const postIds = postRows.map(post => post.id);
+      const authorIds = [...new Set(postRows.map(post => post.author_id))];
+
+      const profileRequest = authorIds.length
+        ? supabase.from("profiles").select("id, username, display_name, avatar_url").in("id", authorIds)
+        : Promise.resolve({ data: [], error: null });
+
+      const related = postIds.length
+        ? await Promise.all([
+            supabase.from("social_post_likes").select("post_id, user_id").in("post_id", postIds),
+            supabase.from("social_post_reposts").select("post_id, user_id").in("post_id", postIds),
+            supabase.from("social_post_replies").select("id, post_id").in("post_id", postIds),
+            profileRequest
+          ])
+        : [
+            { data: [], error: null },
+            { data: [], error: null },
+            { data: [], error: null },
+            await profileRequest
+          ];
+
+      const [likesResult, repostsResult, repliesResult, profilesResult] = related;
+      const profileById = new Map((profilesResult.data || []).map(item => [item.id, item]));
+      const likes = likesResult.data || [];
+      const reposts = repostsResult.data || [];
+      const replies = repliesResult.data || [];
+
+      let bookmarks = [];
+      let follows = [];
+      if (user?.id) {
+        const [bookmarkResult, followResult] = await Promise.all([
+          supabase.from("social_post_bookmarks").select("post_id").eq("user_id", user.id),
+          supabase.from("social_follows").select("followed_id").eq("follower_id", user.id)
+        ]);
+        if (bookmarkResult.error) throw bookmarkResult.error;
+        if (followResult.error) throw followResult.error;
+        bookmarks = bookmarkResult.data || [];
+        follows = followResult.data || [];
+      }
+
+      const savedSet = new Set(bookmarks.map(item => item.post_id));
+      const followedSet = new Set(follows.map(item => item.followed_id));
+
+      setSavedIds([...savedSet]);
+      setFollowing([...followedSet]);
+      setPosts(postRows.map(post => {
+        const author = profileById.get(post.author_id);
+        const name = author?.display_name || author?.username || "Pessoa usuária";
+        const postLikes = likes.filter(item => item.post_id === post.id);
+        const postReposts = reposts.filter(item => item.post_id === post.id);
+        return {
+          id: post.id,
+          authorId: post.author_id,
+          name,
+          handle: author?.username ? "@" + author.username : "@usuario",
+          initials: initialsFor(name),
+          avatarUrl: author?.avatar_url || "",
+          createdAt: post.created_at,
+          time: timeAgo(post.created_at),
+          tag: post.topic || "Comunidade",
+          body: post.body,
+          likes: postLikes.length,
+          replies: replies.filter(item => item.post_id === post.id).length,
+          reposts: postReposts.length,
+          liked: postLikes.some(item => item.user_id === user?.id),
+          reposted: postReposts.some(item => item.user_id === user?.id),
+          saved: savedSet.has(post.id),
+          isFollowing: followedSet.has(post.author_id)
+        };
+      }));
+    } catch (error) {
+      setNotice("Não consegui atualizar o feed: " + friendlyError(error));
+    } finally {
+      setLoadingFeed(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+    let active = true;
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!active) return;
+      if (error) setNotice(friendlyError(error));
+      setUser(data.session?.user || null);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) setUser(session?.user || null);
+    });
+    return () => {
+      active = false;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!user || !supabase) {
+      setProfile(null);
+      return () => { active = false; };
+    }
+
+    ensureProfile(user)
+      .then(data => { if (active) setProfile(data); })
+      .catch(error => { if (active) setNotice("Não consegui carregar seu perfil: " + friendlyError(error)); });
+
+    return () => { active = false; };
+  }, [user?.id]);
+
+  useEffect(() => {
+    refreshFeed();
+  }, [refreshFeed]);
+
+  const visiblePosts = useMemo(() => {
+    const text = query.trim().toLowerCase();
+    return posts.filter(post =>
+      (page !== "Salvos" || post.saved) &&
+      (!text || (post.name + " " + post.handle + " " + post.body + " " + post.tag).toLowerCase().includes(text))
+    ).sort((a, b) => tab === "Recentes"
+      ? new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      : 0);
+  }, [posts, query, page, tab]);
+
+  const suggestions = useMemo(() => {
+    const unique = new Map();
+    posts.forEach(post => {
+      if (post.authorId !== user?.id && !unique.has(post.authorId)) {
+        unique.set(post.authorId, {
+          id: post.authorId,
+          initials: post.initials,
+          name: post.name,
+          handle: post.handle
+        });
+      }
+    });
+    return [...unique.values()].slice(0, 4);
+  }, [posts, user?.id]);
+
+  function requireUser(message = "Entre ou crie uma conta para usar essa função.") {
+    if (user) return true;
+    setAuthMode("login");
+    setAuthFeedback(message);
+    setAuthOpen(true);
+    return false;
+  }
+
+  async function publish() {
+    const body = draft.trim();
+    if (!body) {
+      setNotice("Escreva algo antes de publicar.");
+      return;
+    }
+    if (body.length > 500) {
+      setNotice("Sua publicação pode ter no máximo 500 caracteres.");
+      return;
+    }
+    if (!requireUser("Faça login para publicar e compartilhar suas ideias.")) return;
+    if (!supabase) return;
+
+    setActionBusy("publish");
+    try {
+      await ensureProfile(user);
+      const { error } = await supabase.from("social_posts").insert({
+        author_id: user.id,
+        body,
+        topic: "Comunidade",
+        visibility: "public"
+      });
+      if (error) throw error;
+      setDraft("");
+      setShowComposer(false);
+      setPage("Início");
+      setQuery("");
+      setNotice("Publicação enviada para o feed.");
+      await refreshFeed();
+    } catch (error) {
+      setNotice("Não foi possível publicar: " + friendlyError(error));
+    } finally {
+      setActionBusy("");
+    }
+  }
+
+  async function togglePostRelation(table, post, active, kind) {
+    if (!requireUser()) return;
+    if (!supabase || actionBusy) return;
+
+    setActionBusy(kind + post.id);
+    try {
+      let result;
+      if (active) {
+        result = await supabase.from(table).delete().eq("post_id", post.id).eq("user_id", user.id);
+      } else {
+        result = await supabase.from(table).insert({ post_id: post.id, user_id: user.id });
+      }
+      if (result.error) throw result.error;
+      await refreshFeed();
+      const messages = {
+        like: active ? "Curtida removida." : "Você curtiu a publicação.",
+        repost: active ? "Repost desfeito." : "Publicação repostada.",
+        save: active ? "Publicação removida dos salvos." : "Publicação salva."
+      };
+      setNotice(messages[kind]);
+    } catch (error) {
+      setNotice("Não foi possível atualizar a publicação: " + friendlyError(error));
+    } finally {
+      setActionBusy("");
+    }
+  }
+
+  async function toggleFollow(person) {
+    if (!requireUser("Entre para seguir outras pessoas e montar seu feed.")) return;
+    if (!supabase || actionBusy) return;
+    const active = following.includes(person.id);
+    setActionBusy("follow" + person.id);
+    try {
+      const result = active
+        ? await supabase.from("social_follows").delete().eq("follower_id", user.id).eq("followed_id", person.id)
+        : await supabase.from("social_follows").insert({ follower_id: user.id, followed_id: person.id });
+      if (result.error) throw result.error;
+      await refreshFeed();
+      setNotice(active ? "Você deixou de seguir " + person.name + "." : "Agora você segue " + person.name + ".");
+    } catch (error) {
+      setNotice("Não foi possível atualizar quem você segue: " + friendlyError(error));
+    } finally {
+      setActionBusy("");
+    }
+  }
+
+  async function submitAuth(event) {
+    event.preventDefault();
+    if (!supabase) {
+      setAuthFeedback("A conexão com o Supabase não está configurada nesta versão.");
+      return;
+    }
+    setAuthBusy(true);
+    setAuthFeedback("");
+    try {
+      if (authMode === "signup") {
+        const { data, error } = await supabase.auth.signUp({
+          email: authEmail.trim(),
+          password: authPassword,
+          options: { data: { display_name: authName.trim() } }
+        });
+        if (error) throw error;
+        if (data.session) {
+          setAuthOpen(false);
+          setNotice("Conta criada. Bem-vindo ao NexEl!");
+        } else {
+          setAuthFeedback("Conta criada! Confira seu e-mail e confirme o cadastro. Depois, volte aqui para entrar.");
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: authEmail.trim(),
+          password: authPassword
+        });
+        if (error) throw error;
+        setAuthOpen(false);
+        setAuthPassword("");
+        setAuthFeedback("");
+        setNotice("Login realizado. Bom te ver no NexEl!");
+      }
+    } catch (error) {
+      setAuthFeedback(friendlyError(error));
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function signOut() {
+    if (!supabase) return;
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      setNotice("Não foi possível sair: " + friendlyError(error));
+      return;
+    }
+    setProfileOpen(false);
+    setNotice("Você saiu da sua conta.");
+  }
+
+  function openProfile() {
+    setProfileName(profile?.display_name || "");
+    setProfileUsername(profile?.username || "");
+    setProfileBio(profile?.bio || "");
+    setProfileOpen(true);
+  }
+
+  async function saveProfile(event) {
+    event.preventDefault();
+    if (!user || !supabase || !profile) return;
+    const username = profileUsername.trim().toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 32);
+    const displayName = profileName.trim().slice(0, 80);
+    const bio = profileBio.trim().slice(0, 160);
+    if (username.length < 3 || !displayName) {
+      setNotice("O nome precisa ter até 80 caracteres e o usuário, de 3 a 32 caracteres.");
+      return;
+    }
+
+    setProfileBusy(true);
+    try {
+      const { data, error } = await supabase.from("profiles")
+        .update({ username, display_name: displayName, bio, updated_at: new Date().toISOString() })
+        .eq("id", user.id)
+        .select("id, username, display_name, bio, avatar_url")
+        .single();
+      if (error) throw error;
+      setProfile(data);
+      setProfileOpen(false);
+      setNotice("Perfil atualizado.");
+      await refreshFeed();
+    } catch (error) {
+      setNotice("Não foi possível salvar o perfil: " + friendlyError(error));
+    } finally {
+      setProfileBusy(false);
+    }
+  }
+
+  function sharePost(post) {
+    if (!navigator.clipboard?.writeText) {
+      setNotice("Seu navegador não permitiu copiar o texto automaticamente.");
+      return;
+    }
+    navigator.clipboard.writeText(post.body)
+      .then(() => setNotice("Texto da publicação copiado para compartilhar."))
+      .catch(() => setNotice("Não consegui copiar o texto neste navegador."));
+  }
+
+  function selectPage(label) {
+    setPage(label);
+    if (label === "Mensagens") setNotice("Mensagens diretas estão planejadas para a próxima etapa.");
+    else if (label === "Notificações") setNotice("Notificações em tempo real serão adicionadas na próxima etapa.");
+    else setNotice("");
+  }
+
+  const initials = initialsFor(profile?.display_name || user?.email || "NexEl");
 
   return <div className="app-shell">
     <aside className="left-rail">
-      <button className="brand-mark" onClick={() => {setPage("Início"); setQuery("");}} aria-label="NexEl início">N<span>.</span></button>
-      {nav.map(([label, icon]) => <button key={label} className={`rail-item ${page === label ? "active" : ""}`} onClick={() => {setPage(label); if(label !== "Salvos") setNotice(label === "Mensagens" ? "Mensagens diretas entrarão na próxima etapa conectada." : "");}} aria-label={label} title={label}><Icon>{icon}</Icon></button>)}
+      <button className="brand-mark" onClick={() => { setPage("Início"); setQuery(""); }} aria-label="NexEl início">N<span>.</span></button>
+      {nav.map(([label, icon]) => <button key={label} className={"rail-item " + (page === label ? "active" : "")} onClick={() => selectPage(label)} aria-label={label} title={label}><Icon>{icon}</Icon></button>)}
       <button className="rail-compose" onClick={() => setShowComposer(true)} aria-label="Nova publicação">＋</button>
       <div className="rail-spacer" />
-      <Avatar initials="JO" />
+      <button className="avatar-button" onClick={user ? openProfile : () => setAuthOpen(true)} aria-label="Conta"><Avatar initials={initials} /></button>
     </aside>
 
     <aside className="sidebar">
       <div className="brand-lockup"><div className="brand-mini">N</div><div><strong>NexEl</strong><small>Ideias que conectam.</small></div></div>
-      <label className="search"><Icon>⌕</Icon><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar pessoas, assuntos e posts" aria-label="Buscar" /><kbd>/</kbd></label>
+      <label className="search"><Icon>⌕</Icon><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar pessoas, assuntos e posts" aria-label="Buscar" /><kbd>/</kbd></label>
       <div className="section-label">SEU ESPAÇO</div>
-      {nav.map(([label, icon], i) => <button key={label} className={`side-link ${page === label ? "selected" : ""}`} onClick={() => setPage(label)}><Icon>{icon}</Icon>{label}{label === "Notificações" && <span className="count">3</span>}</button>)}
-      <div className="section-row"><span className="section-label">COMUNIDADES</span><button onClick={() => setNotice("Criação de comunidades será habilitada após conectar a API.")} aria-label="Adicionar comunidade">＋</button></div>
-      <button className="community"><span className="community-icon blue">DS</span><span><b>Dev & Sistemas</b><small>1,2 mil membros</small></span></button>
-      <button className="community"><span className="community-icon green">CR</span><span><b>Criadores</b><small>846 membros</small></span></button>
-      <button className="community"><span className="community-icon yellow">ID</span><span><b>Ideias em debate</b><small>512 membros</small></span></button>
+      {nav.map(([label, icon]) => <button key={label} className={"side-link " + (page === label ? "selected" : "")} onClick={() => selectPage(label)}><Icon>{icon}</Icon>{label}{label === "Notificações" && <span className="count">•</span>}</button>)}
+      <div className="section-row"><span className="section-label">COMUNIDADES</span><button onClick={() => setNotice("A criação de comunidades será a próxima etapa depois do feed social.")} aria-label="Adicionar comunidade">＋</button></div>
+      <button className="community" onClick={() => setNotice("Comunidades ainda são uma prévia visual; a criação e os canais serão conectados depois.")}><span className="community-icon blue">DS</span><span><b>Dev & Sistemas</b><small>Comunidade de demonstração</small></span></button>
+      <button className="community" onClick={() => setNotice("Comunidades ainda são uma prévia visual; a criação e os canais serão conectados depois.")}><span className="community-icon green">CR</span><span><b>Criadores</b><small>Comunidade de demonstração</small></span></button>
+      <button className="community" onClick={() => setNotice("Comunidades ainda são uma prévia visual; a criação e os canais serão conectados depois.")}><span className="community-icon yellow">ID</span><span><b>Ideias em debate</b><small>Comunidade de demonstração</small></span></button>
       <div className="sidebar-bottom"><div className="tiny-globe">◎</div><b>Um lugar para construir.</b><p>Compartilhe ideias, encontre pessoas e participe de conversas que importam.</p></div>
     </aside>
 
     <main className="main-column">
-      <header className="mobile-top"><button className="brand-mark small" onClick={() => setPage("Início")}>N<span>.</span></button><b>{page === "Início" ? "NexEl" : page}</b><Avatar initials="JO" /></header>
-      <div className="page-header"><div><span className="eyebrow">NEXEL / SOCIAL</span><h1>{page === "Início" ? "Seu espaço, suas conversas." : page}</h1><p>Uma boa ideia fica ainda melhor quando é compartilhada.</p></div><button className="icon-button" onClick={() => setNotice("As preferências da conta serão conectadas na próxima etapa.")} aria-label="Preferências">⚙</button></div>
+      <header className="mobile-top"><button className="brand-mark small" onClick={() => { setPage("Início"); setQuery(""); }}>N<span>.</span></button><b>{page === "Início" ? "NexEl" : page}</b><button className="avatar-button" onClick={user ? openProfile : () => setAuthOpen(true)}><Avatar initials={initials} /></button></header>
+      <div className="page-header">
+        <div><span className="eyebrow">NEXEL / SOCIAL</span><h1>{page === "Início" ? "Seu espaço, suas conversas." : page}</h1><p>Uma boa ideia fica ainda melhor quando é compartilhada.</p></div>
+        <div className="header-actions">
+          {user
+            ? <><button className="account-chip" onClick={openProfile}>{profile?.display_name || user.email || "Minha conta"}</button><button className="ghost-button" onClick={signOut}>Sair</button></>
+            : <button className="primary-button" onClick={() => { setAuthMode("login"); setAuthFeedback(""); setAuthOpen(true); }}>Entrar</button>}
+          <button className="icon-button" onClick={user ? openProfile : () => setNotice("Entre no NexEl para configurar seu perfil.")} aria-label="Preferências">⚙</button>
+        </div>
+      </div>
 
-      {showComposer && <section className="composer">
-        <Avatar initials="JO" />
-        <div className="composer-body"><textarea value={draft} onChange={e => setDraft(e.target.value)} maxLength={500} placeholder="Compartilhe uma ideia, uma descoberta ou algo que te inspira..." autoFocus aria-label="Texto da publicação" /><div className="composer-footer"><span>{draft.length}/500</span><button className="primary-button" onClick={publish}>Publicar <span>↑</span></button></div></div>
-      </section>}
-      {!showComposer && <button className="composer-prompt" onClick={() => setShowComposer(true)}><Avatar initials="JO" /><span><b>Vamos conversar?</b><small>Compartilhe algo que te inspira...</small></span><span className="prompt-plus">＋</span></button>}
-      {notice && <div className="notice" role="status"><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Fechar aviso">×</button></div>}
-      <div className="feed-tabs"><div>{["Para você", "Recentes"].map(t => <button key={t} className={tab === t ? "chosen" : ""} onClick={() => setTab(t)}>{t}</button>)}</div><span>{visiblePosts.length} publicações</span></div>
-      <section className="feed" aria-label="Feed de publicações">
-        {visiblePosts.length === 0 && <div className="empty"><b>Nada por aqui ainda.</b><p>Tente outra busca ou publique uma nova ideia.</p></div>}
-        {[...visiblePosts].sort((a,b) => tab === "Recentes" ? b.id-a.id : 0).map(post => <article className="post" key={post.id}>
-          <Avatar initials={post.initials} color={post.initials === "BL" ? "lavender" : post.initials === "CN" ? "mint" : ""} />
-          <div className="post-content"><div className="post-meta"><b>{post.name}</b><span>{post.handle}</span><i>·</i><span>{post.time}</span><button className="more-button" aria-label="Mais opções" onClick={() => toggleSave(post.id)}>•••</button></div><p>{post.body}</p><button className="topic-pill" onClick={() => setQuery(post.tag)}># {post.tag}</button>
-            <div className="post-actions"><button onClick={() => setNotice("Respostas serão persistidas quando o backend estiver conectado.")} aria-label="Responder"><Icon>↶</Icon><span>{post.replies}</span></button><button className={reposts.includes(post.id) ? "action-on" : ""} onClick={() => toggleRepost(post.id)} aria-label="Repostar"><Icon>↻</Icon><span>{post.reposts + (reposts.includes(post.id) ? 1 : 0)}</span></button><button className={post.liked ? "like-on" : ""} onClick={() => toggleLike(post.id)} aria-label="Curtir"><Icon>♡</Icon><span>{post.likes}</span></button><button className={saved.includes(post.id) ? "action-on" : ""} onClick={() => toggleSave(post.id)} aria-label="Salvar"><Icon>◇</Icon></button><button onClick={() => {navigator.clipboard?.writeText(post.body);setNotice("Texto copiado, se o navegador permitir.");}} aria-label="Compartilhar"><Icon>↗</Icon></button></div>
-          </div>
-        </article>)}
-      </section>
+      {page === "Mensagens" || page === "Notificações" ? <section className="feature-placeholder"><div className="placeholder-symbol">{page === "Mensagens" ? "▤" : "◉"}</div><h2>{page === "Mensagens" ? "Conversas privadas estão chegando" : "Notificações estão chegando"}</h2><p>O feed social já pode usar sua conta e salvar as interações no banco. Esta área será conectada na próxima etapa.</p><button className="primary-button" onClick={() => setPage("Início")}>Voltar ao feed</button></section> : <>
+        {showComposer
+          ? <section className="composer"><Avatar initials={initials} /><div className="composer-body"><textarea value={draft} onChange={event => setDraft(event.target.value)} maxLength={500} placeholder="Compartilhe uma ideia, uma descoberta ou algo que te inspira..." autoFocus aria-label="Texto da publicação" /><div className="composer-footer"><span>{draft.length}/500</span><div className="composer-buttons"><button className="ghost-button" onClick={() => { setShowComposer(false); setDraft(""); }}>Cancelar</button><button className="primary-button" onClick={publish} disabled={actionBusy === "publish"}>{actionBusy === "publish" ? "Publicando..." : "Publicar"} <span>↑</span></button></div></div></div></section>
+          : <button className="composer-prompt" onClick={() => setShowComposer(true)}><Avatar initials={initials} /><span><b>Vamos conversar?</b><small>Compartilhe algo que te inspira...</small></span><span className="prompt-plus">＋</span></button>}
+
+        {notice && <div className="notice" role="status"><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Fechar aviso">×</button></div>}
+        <div className="feed-tabs"><div>{["Para você", "Recentes"].map(value => <button key={value} className={tab === value ? "chosen" : ""} onClick={() => setTab(value)}>{value}</button>)}</div><span>{loadingFeed ? "Atualizando..." : visiblePosts.length + " publicações"} <button className="refresh-button" onClick={refreshFeed} aria-label="Atualizar feed" title="Atualizar feed">↻</button></span></div>
+
+        <section className="feed" aria-label="Feed de publicações">
+          {!isSupabaseConfigured && <div className="empty"><b>Conexão do banco pendente</b><p>Configure as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY para carregar publicações.</p></div>}
+          {isSupabaseConfigured && page === "Salvos" && !user && <div className="empty"><b>Entre para ver seus salvos.</b><p>Suas publicações favoritas ficam guardadas na sua conta.</p><button className="primary-button" onClick={() => { setAuthMode("login"); setAuthOpen(true); }}>Entrar</button></div>}
+          {isSupabaseConfigured && loadingFeed && posts.length === 0 && <div className="empty"><b>Carregando o feed...</b><p>Buscando publicações do NexEl.</p></div>}
+          {isSupabaseConfigured && !loadingFeed && visiblePosts.length === 0 && !(page === "Salvos" && !user) && <div className="empty"><b>{page === "Salvos" ? "Você ainda não salvou publicações." : "Ainda não há publicações por aqui."}</b><p>{page === "Salvos" ? "Use o ícone de marcador em qualquer publicação." : "Seja uma das primeiras pessoas a compartilhar uma ideia."}</p></div>}
+          {visiblePosts.map(post => <article className="post" key={post.id}>
+            <Avatar initials={post.initials} />
+            <div className="post-content">
+              <div className="post-meta"><b>{post.name}</b><span>{post.handle}</span><i>·</i><span>{post.time}</span><button className="more-button" aria-label="Salvar publicação" title={post.saved ? "Remover dos salvos" : "Salvar"} onClick={() => togglePostRelation("social_post_bookmarks", post, post.saved, "save")}>•••</button></div>
+              <p>{post.body}</p><button className="topic-pill" onClick={() => setQuery(post.tag)}># {post.tag}</button>
+              <div className="post-actions">
+                <button onClick={() => requireUser("Entre para participar das respostas. As respostas serão conectadas na próxima etapa.")} aria-label="Responder"><Icon>↶</Icon><span>{post.replies}</span></button>
+                <button className={post.reposted ? "action-on" : ""} onClick={() => togglePostRelation("social_post_reposts", post, post.reposted, "repost")} aria-label="Repostar" disabled={Boolean(actionBusy)}><Icon>↻</Icon><span>{post.reposts}</span></button>
+                <button className={post.liked ? "like-on" : ""} onClick={() => togglePostRelation("social_post_likes", post, post.liked, "like")} aria-label="Curtir" disabled={Boolean(actionBusy)}><Icon>♡</Icon><span>{post.likes}</span></button>
+                <button className={post.saved ? "action-on" : ""} onClick={() => togglePostRelation("social_post_bookmarks", post, post.saved, "save")} aria-label={post.saved ? "Remover dos salvos" : "Salvar"} disabled={Boolean(actionBusy)}><Icon>◇</Icon></button>
+                <button onClick={() => sharePost(post)} aria-label="Compartilhar"><Icon>↗</Icon></button>
+              </div>
+            </div>
+          </article>)}
+        </section>
+      </>}
       <footer className="footer">Sobre <span>·</span> Privacidade <span>·</span> Ajuda <span>·</span> © 2026 NexEl</footer>
     </main>
 
     <aside className="right-column">
-      <div className="right-card trends"><div className="right-title"><b>Em alta agora</b><button onClick={() => setPage("Explorar")}>Ver tudo</button></div>{trends.map(([category, title, change]) => <button className="trend" key={title} onClick={() => {setQuery(title.replace("#",""));setPage("Início");}}><small>{category} · Tendência</small><b>{title}</b><span>{change}</span></button>)}</div>
-      <div className="right-card"><div className="right-title"><b>Pessoas para conhecer</b><button onClick={() => setNotice("Mais sugestões chegarão com o backend.")}>Mais</button></div>{[["IM","Isabela Moura","@isabelacria"],["CN","Caio Nascimento","@caio.dev"],["BL","Beatriz Lima","@bia.ux"]].map(([initials,name,handle]) => <div className="person" key={handle}><Avatar initials={initials} color={initials==="BL"?"lavender":initials==="CN"?"mint":""}/><div><b>{name}</b><small>{handle}</small></div><button className={following.includes(handle) ? "follow following" : "follow"} onClick={() => toggleFollow(handle)}>{following.includes(handle) ? "Seguindo" : "Seguir"}</button></div>)}</div>
-      <div className="status-card"><span className="status-dot" /> <b>Prévia interativa</b><p>Publicações e interações funcionam nesta sessão. O backend e o login ainda precisam ser conectados para persistência real.</p></div>
+      <div className="right-card trends"><div className="right-title"><b>Em alta agora</b><button onClick={() => setPage("Explorar")}>Ver tudo</button></div>{trends.map(([category, title, change]) => <button className="trend" key={title} onClick={() => { setQuery(title.replace("#", "")); setPage("Explorar"); }}><small>{category} · Tendência</small><b>{title}</b><span>{change}</span></button>)}</div>
+      <div className="right-card"><div className="right-title"><b>Pessoas para conhecer</b><button onClick={refreshFeed}>Atualizar</button></div>{suggestions.length === 0 && <p className="suggestion-empty">Novas pessoas aparecerão aqui quando houver publicações.</p>}{suggestions.map(person => <div className="person" key={person.id}><Avatar initials={person.initials} /><div><b>{person.name}</b><small>{person.handle}</small></div><button className={following.includes(person.id) ? "follow following" : "follow"} onClick={() => toggleFollow(person)} disabled={actionBusy === "follow" + person.id}>{following.includes(person.id) ? "Seguindo" : "Seguir"}</button></div>)}</div>
+      <div className="status-card"><span className={"status-dot " + (isSupabaseConfigured ? "" : "offline")} /> <b>{isSupabaseConfigured ? "Banco conectado" : "Banco não configurado"}</b><p>{isSupabaseConfigured ? "Conta, perfil, publicações, curtidas, reposts, salvos e seguir usam o Supabase. Mensagens e chamadas ainda estão no roteiro." : "Esta versão precisa das variáveis de conexão do Supabase para carregar os recursos reais."}</p></div>
     </aside>
-    <nav className="mobile-nav">{nav.map(([label, icon]) => <button key={label} className={page === label ? "active" : ""} onClick={() => setPage(label)}><Icon>{icon}</Icon><small>{label === "Notificações" ? "Alertas" : label === "Mensagens" ? "DMs" : label}</small></button>)}</nav>
+    <nav className="mobile-nav">{nav.map(([label, icon]) => <button key={label} className={page === label ? "active" : ""} onClick={() => selectPage(label)}><Icon>{icon}</Icon><small>{label === "Notificações" ? "Alertas" : label === "Mensagens" ? "DMs" : label}</small></button>)}</nav>
+
+    {authOpen && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setAuthOpen(false); }}>
+      <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+        <button className="modal-close" onClick={() => setAuthOpen(false)} aria-label="Fechar">×</button>
+        <div className="modal-brand">N<span>.</span></div>
+        <span className="eyebrow">NEXEL / SUA CONTA</span>
+        <h2 id="auth-title">{authMode === "signup" ? "Crie seu espaço." : "Que bom te ver."}</h2>
+        <p className="modal-description">{authMode === "signup" ? "Crie uma conta para publicar e conversar com a comunidade." : "Entre para publicar, curtir, salvar e seguir pessoas."}</p>
+        <div className="auth-switch"><button className={authMode === "login" ? "selected" : ""} onClick={() => { setAuthMode("login"); setAuthFeedback(""); }}>Entrar</button><button className={authMode === "signup" ? "selected" : ""} onClick={() => { setAuthMode("signup"); setAuthFeedback(""); }}>Criar conta</button></div>
+        <form onSubmit={submitAuth} className="modal-form">
+          {authMode === "signup" && <label>Como quer ser chamado?<input value={authName} onChange={event => setAuthName(event.target.value)} required minLength={2} maxLength={80} autoComplete="name" placeholder="Seu nome" /></label>}
+          <label>E-mail<input type="email" value={authEmail} onChange={event => setAuthEmail(event.target.value)} required autoComplete="email" placeholder="voce@email.com" /></label>
+          <label>Senha<input type="password" value={authPassword} onChange={event => setAuthPassword(event.target.value)} required minLength={6} autoComplete={authMode === "signup" ? "new-password" : "current-password"} placeholder="Pelo menos 6 caracteres" /></label>
+          {authFeedback && <div className="modal-feedback" role="status">{authFeedback}</div>}
+          <button className="primary-button modal-submit" type="submit" disabled={authBusy}>{authBusy ? "Aguarde..." : authMode === "signup" ? "Criar conta grátis" : "Entrar no NexEl"}</button>
+        </form>
+        <small className="privacy-note">Sua senha é validada pelo Supabase Auth; ela não é armazenada no perfil do NexEl.</small>
+      </section>
+    </div>}
+
+    {profileOpen && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setProfileOpen(false); }}>
+      <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="profile-title">
+        <button className="modal-close" onClick={() => setProfileOpen(false)} aria-label="Fechar">×</button>
+        <span className="eyebrow">NEXEL / PERFIL</span>
+        <h2 id="profile-title">Seu perfil</h2>
+        <p className="modal-description">Atualize as informações que outras pessoas veem no feed.</p>
+        <form onSubmit={saveProfile} className="modal-form">
+          <label>Nome de exibição<input value={profileName} onChange={event => setProfileName(event.target.value)} required maxLength={80} /></label>
+          <label>Nome de usuário<input value={profileUsername} onChange={event => setProfileUsername(event.target.value)} required minLength={3} maxLength={32} /></label>
+          <label>Bio<textarea value={profileBio} onChange={event => setProfileBio(event.target.value)} maxLength={160} rows={3} placeholder="Conte algo sobre você..." /></label>
+          <span className="bio-counter">{profileBio.length}/160</span>
+          <button className="primary-button modal-submit" type="submit" disabled={profileBusy}>{profileBusy ? "Salvando..." : "Salvar perfil"}</button>
+          <button className="ghost-button modal-logout" type="button" onClick={signOut}>Sair da conta</button>
+        </form>
+      </section>
+    </div>}
   </div>;
 }
