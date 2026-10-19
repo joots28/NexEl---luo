@@ -6,7 +6,7 @@
 
 A prévia pública está conectada ao projeto Supabase NexEl. Cadastro e login, perfil, feed, publicações, curtidas, reposts, respostas, favoritos, seguir pessoas, comunidades públicas, adesão de membros, canais padrão e chat de texto persistente usam o banco remoto. As ações protegidas exigem uma conta e respeitam as políticas de Row Level Security (RLS) do Supabase.
 
-**Ainda não considerar prontos:** mensagens diretas privadas, notificações em tempo real, gestão avançada de canais e permissões, moderação avançada, bots e chamadas de voz/vídeo. Os canais de voz aparecem no sistema, mas áudio/vídeo não está implementado. O chat de texto atual atualiza automaticamente a cada 12 segundos; não é um canal realtime.
+**Ainda não considerar prontos:** notificações em tempo real, gestão avançada de canais e permissões, moderação avançada, bots e chamadas de voz/vídeo. Os canais de voz aparecem no sistema, mas áudio/vídeo não está implementado. O chat dos canais e as mensagens privadas atualizam automaticamente em intervalos curtos; ainda não são um canal realtime.
 
 ## Stack
 
@@ -29,6 +29,7 @@ A prévia pública está conectada ao projeto Supabase NexEl. Cadastro e login, 
 - Criação de comunidades públicas com canais padrão de texto e voz
 - Descoberta e entrada em comunidades públicas; lista das comunidades das quais a pessoa participa
 - Chat de texto persistente por canal com atualização automática, limite de 2.000 caracteres e controle de acesso RLS
+- Mensagens privadas entre duas contas, com acesso restrito a quem envia ou recebe, validação de identidade e limite de 2.000 caracteres
 - Feedback de erros, estado de carregamento e layout adaptável
 
 ## Executar localmente
@@ -57,7 +58,7 @@ npm run dev
 3. Resolver o aviso do Advisor relativo à função SECURITY DEFINER `accept_server_invite` antes de ativar convites de comunidades.
 4. Adicionar testes automatizados que executem contra um projeto de teste isolado.
 5. Implementar notificações, bloqueios, denúncias, limites contra spam e ferramentas de moderação.
-6. Adicionar criação/gestão de canais personalizados, convites seguros e mensagens diretas com suas próprias regras de privacidade.
+6. Adicionar criação/gestão de canais personalizados e convites seguros; implementar notificações e recibos de leitura das mensagens privadas.
 7. Implementar voz/vídeo com infraestrutura própria e testes específicos de qualidade e privacidade.
 
 ## Identidade visual
