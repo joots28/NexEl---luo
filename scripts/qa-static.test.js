@@ -172,3 +172,23 @@ test("email auth normalizes input and explains validation errors in Portuguese",
   assert.match(app, /Esse e-mail já possui uma conta/);
   assert.match(app, /email address not authorized/i);
 });
+
+
+test("auth initialization leaves the loading screen after an eight-second timeout", () => {
+  const app = read("../src/App.jsx");
+  assert.match(app, /initializationTimeout/);
+  assert.match(app, /setAuthInitialized\(true\)/);
+  assert.match(app, /setUser\(null\)/);
+  assert.match(app, /verificação da sessão demorou mais que o esperado/);
+});
+
+test("runtime render failures show a responsive recovery screen instead of a blank page", () => {
+  const main = read("../src/main.jsx");
+  const boundary = read("../src/components/AppErrorBoundary.jsx");
+  const css = read("../src/backend.css");
+  assert.match(main, /<AppErrorBoundary>/);
+  assert.match(boundary, /getDerivedStateFromError/);
+  assert.match(boundary, /Recarregar página/);
+  assert.match(css, /\.nexel-error-fallback/);
+  assert.match(css, /min-height: 100svh/);
+});
