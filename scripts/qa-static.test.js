@@ -107,7 +107,7 @@ test("learning hub requires signed-in access and recommends lessons from learner
 
 test("teacher-only video upload is enforced by database and private storage", () => {
   const migration = read("../supabase/migrations/20261019030000_nexel_learning_hub_teacher_verification_and_help_forum.sql");
-  const cleanupMigration = read("../supabase/migrations/20261019030600_nexel_allow_cleanup_untracked_learning_video_uploads.sql");
+  const cleanupMigration = read("../supabase/migrations/20261019030505_nexel_allow_cleanup_untracked_learning_video_uploads.sql");
   const hub = read("../src/components/LearningHub.jsx");
   assert.match(migration, /create table if not exists public\.teacher_verification_requests/i);
   assert.match(migration, /create table if not exists public\.platform_admins/i);
@@ -124,7 +124,7 @@ test("teacher-only video upload is enforced by database and private storage", ()
 test("developer help forum stores questions, answers, votes and accepted solutions", () => {
   const forum = read("../src/components/HelpForum.jsx");
   const migration = read("../supabase/migrations/20261019030000_nexel_learning_hub_teacher_verification_and_help_forum.sql");
-  const safetyMigration = read("../supabase/migrations/20261019030500_nexel_protect_help_answer_acceptance_and_authorship.sql");
+  const safetyMigration = read("../supabase/migrations/20261019030049_nexel_protect_help_answer_acceptance_and_authorship.sql");
   assert.match(forum, /from\("help_questions"\)\.insert/);
   assert.match(forum, /from\("help_answers"\)\.insert/);
   assert.match(forum, /from\("help_question_votes"\)/);
