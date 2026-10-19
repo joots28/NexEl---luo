@@ -58,6 +58,17 @@ test("README documents communities and text chat without claiming voice is ready
   assert.match(readme, /voz\/vídeo/i);
 });
 
+test("private messages have participant-only RLS and a connected UI", () => {
+  const app = read("../src/App.jsx");
+  const migration = read("../supabase/migrations/20261019024300_create_private_direct_messages.sql");
+  assert.match(app, /from\("direct_messages"\)\.insert/);
+  assert.match(app, /from\("direct_messages"\)/);
+  assert.match(migration, /enable row level security/i);
+  assert.match(migration, /direct_messages_select_participant/i);
+  assert.match(migration, /sender_id = \(select auth\.uid\(\)\)/i);
+  assert.match(migration, /recipient_id = \(select auth\.uid\(\)\)/i);
+});
+
 test("environment template is tracked and local secrets are ignored", () => {
   assert.ok(existsSync(new URL("../.env.example", import.meta.url)));
   assert.match(read("../.gitignore"), /\.env\.\*/);
