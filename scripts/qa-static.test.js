@@ -149,3 +149,15 @@ test("learning video status mapping has no duplicate rejected key", () => {
   const statusMap = hub.match(/function statusCopy\(status\) \{[\s\S]*?\n\}/)?.[0] || "";
   assert.equal((statusMap.match(/rejected\s*:/g) || []).length, 1);
 });
+
+
+test("curated YouTube lessons are embedded and personalized in Dev Academy", () => {
+  const hub = read("../src/components/LearningHub.jsx");
+  const css = read("../src/education.css");
+  assert.match(hub, /CURATED_YOUTUBE_VIDEOS/);
+  assert.match(hub, /Aulas do Prof\. Caio Malheiros/);
+  assert.match(hub, /youtube-nocookie\.com\/embed/);
+  assert.match(hub, /sort\(\(a, b\) => scoreVideo\(b, learner\) - scoreVideo\(a, learner\)\)/);
+  assert.match(hub, /youtube\.com\/@caiomalheiros/);
+  assert.match(css, /\.learn-video-player iframe/);
+});

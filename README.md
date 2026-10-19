@@ -32,7 +32,7 @@ A prévia pública está conectada ao projeto Supabase NexEl. A rede social exig
 - Descoberta e entrada em comunidades públicas; lista das comunidades das quais a pessoa participa
 - Chat de texto persistente por canal com atualização automática, limite de 2.000 caracteres e controle de acesso RLS
 - Mensagens privadas entre duas contas, com acesso restrito a quem envia ou recebe, validação de identidade e limite de 2.000 caracteres
-- NexEl Dev Academy: questionário de perfil de aprendizagem, recomendações determinísticas por assunto/nível/objetivo e mini-desafios interativos de lógica com histórico no banco
+- NexEl Dev Academy: questionário de perfil de aprendizagem, recomendações determinísticas por assunto/nível/objetivo, mini-desafios interativos de lógica com histórico no banco e uma seleção inicial de aulas públicas do canal do Prof. Caio Malheiros incorporadas via YouTube e ordenadas pelo perfil de aprendizagem
 - Solicitação de verificação de professor revisada manualmente; só perfis aprovados podem enviar vídeos
 - Biblioteca de vídeo privada (MP4/WebM/MOV, até 50 MB por vídeo no plano gratuito), com revisão administrativa antes de publicar
 - Mural de ajuda no estilo Q&A: perguntas, respostas, votos positivos/negativos e marcação da resposta aceita
