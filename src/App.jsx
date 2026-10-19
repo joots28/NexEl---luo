@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { isSupabaseConfigured, supabase } from "./lib/supabaseClient";
+import LearningHub from "./components/LearningHub.jsx";
+import HelpForum from "./components/HelpForum.jsx";
 import "./backend.css";
 
 const trends = [
@@ -98,6 +100,8 @@ export default function App() {
   const nav = [
     ["Início", "⌂"],
     ["Explorar", "⌕"],
+    ["Aprender", "▣"],
+    ["Ajuda", "?"],
     ["Comunidades", "▦"],
     ["Notificações", "◉"],
     ["Mensagens", "▤"],
@@ -994,8 +998,7 @@ export default function App() {
       setCurrentChannel(null);
       setChannelMessages([]);
       setNotice("");
-    } else if (label === "Mensagens") setNotice("Mensagens diretas continuam planejadas para uma etapa própria; os canais de comunidade já terão chat de texto.");
-    else if (label === "Notificações") setNotice("Notificações em tempo real serão adicionadas na próxima etapa.");
+    } else if (label === "Notificações") setNotice("Notificações em tempo real serão adicionadas na próxima etapa.");
     else setNotice("");
   }
 
@@ -1071,7 +1074,7 @@ export default function App() {
     <aside className="left-rail">
       <button className="brand-mark" onClick={() => { setPage("Início"); setQuery(""); }} aria-label="NexEl início">N<span>.</span></button>
       {nav.map(([label, icon]) => <button key={label} className={"rail-item " + (page === label ? "active" : "")} onClick={() => selectPage(label)} aria-label={label} title={label}><Icon>{icon}</Icon></button>)}
-      <button className="rail-compose" onClick={() => setShowComposer(true)} aria-label="Nova publicação">＋</button>
+      <button className="rail-compose" onClick={() => { setPage("Início"); setShowComposer(true); }} aria-label="Nova publicação">＋</button>
       <div className="rail-spacer" />
       <button className="avatar-button" onClick={user ? openProfile : () => setAuthOpen(true)} aria-label="Conta"><Avatar initials={initials} /></button>
     </aside>
@@ -1092,7 +1095,7 @@ export default function App() {
     <main className="main-column">
       <header className="mobile-top"><button className="brand-mark small" onClick={() => { setPage("Início"); setQuery(""); }}>N<span>.</span></button><b>{page === "Início" ? "NexEl" : page}</b><button className="avatar-button" onClick={user ? openProfile : () => setAuthOpen(true)}><Avatar initials={initials} /></button></header>
       <div className="page-header">
-        <div><span className="eyebrow">NEXEL / SOCIAL</span><h1>{page === "Início" ? "Seu espaço, suas conversas." : page}</h1><p>Uma boa ideia fica ainda melhor quando é compartilhada.</p></div>
+        <div><span className="eyebrow">NEXEL / DEV NETWORK</span><h1>{page === "Início" ? "A rede dos devs." : page}</h1><p>{page === "Aprender" ? "Evolua na programação com aulas, desafios e uma trilha no seu ritmo." : page === "Ajuda" ? "Compartilhe uma dúvida e ajude outra pessoa a aprender." : "Uma boa ideia fica ainda melhor quando é compartilhada."}</p></div>
         <div className="header-actions">
           {user
             ? <><button className="account-chip" onClick={openProfile}>{profile?.display_name || user.email || "Minha conta"}</button><button className="ghost-button" onClick={signOut}>Sair</button></>
@@ -1101,7 +1104,7 @@ export default function App() {
         </div>
       </div>
 
-      {page === "Comunidades" ? <section className="community-workspace">
+      {page === "Aprender" ? <LearningHub user={user} /> : page === "Ajuda" ? <HelpForum user={user} profile={profile} /> : page === "Comunidades" ? <section className="community-workspace">
         {notice && <div className="notice" role="status"><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Fechar aviso">×</button></div>}
         {!user ? <div className="feature-placeholder"><div className="placeholder-symbol">▦</div><h2>Encontre sua comunidade</h2><p>Entre para descobrir espaços públicos, participar de canais e conversar com pessoas.</p><button className="primary-button" onClick={() => { setAuthMode("login"); setAuthFeedback(""); setAuthOpen(true); }}>Entrar para continuar</button></div>
         : currentServer ? <div className="server-layout">
