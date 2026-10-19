@@ -36,6 +36,11 @@ function friendlyError(error) {
   if (/unsupported provider|provider.*not enabled|provider.*disabled/i.test(message)) return "Esse método ainda precisa ser ativado em Authentication → Sign In / Providers no Supabase.";
   if (/redirect_to.*not allowed|redirect url.*not allowed|redirect.*not.*allow/i.test(message)) return "A URL do NexEl precisa ser adicionada à lista de redirecionamentos em Authentication → URL Configuration no Supabase.";
   if (/duplicate key|unique constraint/i.test(message)) return "Esse nome de usuário já está em uso. Escolha outro.";
+  if (/email.*(invalid|format)|invalid.*email|email_address_invalid/i.test(message)) return "O formato do e-mail parece inválido. Confira se está no padrão voce@email.com.";
+  if (/email address not authorized/i.test(message)) return "O cadastro não conseguiu enviar o e-mail de confirmação para esse endereço. O serviço de e-mail do projeto precisa ser configurado no Supabase.";
+  if (/user already registered|already been registered/i.test(message)) return "Esse e-mail já possui uma conta. Alterne para Entrar.";
+  if (/password.*(at least|short|length)|weak password/i.test(message)) return "A senha não atende aos requisitos. Use pelo menos 6 caracteres.";
+  if (/email rate limit exceeded|too many requests/i.test(message)) return "Muitas tentativas em pouco tempo. Aguarde um pouco e tente novamente.";
   if (/invalid login credentials/i.test(message)) return "E-mail ou senha incorretos.";
   if (/email not confirmed/i.test(message)) return "Confirme seu e-mail antes de entrar.";
   if (/row-level security|violates row-level security/i.test(message)) return "O banco bloqueou essa ação por segurança. Confira as políticas de acesso.";
@@ -874,7 +879,7 @@ export default function App() {
     try {
       if (authMode === "signup") {
         const { data, error } = await supabase.auth.signUp({
-          email: authEmail.trim(),
+          email: authEmail.trim().toLowerCase(),
           password: authPassword,
           options: { data: { display_name: authName.trim() } }
         });
@@ -887,7 +892,7 @@ export default function App() {
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
-          email: authEmail.trim(),
+          email: authEmail.trim().toLowerCase(),
           password: authPassword
         });
         if (error) throw error;
@@ -1054,7 +1059,7 @@ export default function App() {
 
             <form onSubmit={submitAuth} className="modal-form gate-email-form">
               {authMode === "signup" && <label>Como quer ser chamado?<input value={authName} onChange={event => setAuthName(event.target.value)} required minLength={2} maxLength={80} autoComplete="name" placeholder="Seu nome" /></label>}
-              <label>E-mail<input type="email" value={authEmail} onChange={event => setAuthEmail(event.target.value)} required autoComplete="email" placeholder="voce@email.com" /></label>
+              <label>E-mail<input type="email" value={authEmail} onChange={event => setAuthEmail(event.target.value.replace(/\s+/g, "").toLowerCase())} onInvalid={event => event.currentTarget.setCustomValidity("Digite um e-mail válido, como voce@email.com.")} onInput={event => event.currentTarget.setCustomValidity("")} required autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="voce@email.com" /></label>
               <label>Senha<input type="password" value={authPassword} onChange={event => setAuthPassword(event.target.value)} required minLength={6} autoComplete={authMode === "signup" ? "new-password" : "current-password"} placeholder="Pelo menos 6 caracteres" /></label>
               {authFeedback && <div className="modal-feedback" role="status">{authFeedback}</div>}
               <button className="primary-button modal-submit" type="submit" disabled={authBusy || !isSupabaseConfigured}>{authBusy ? "Aguarde..." : authMode === "signup" ? "Criar conta grátis" : "Entrar no NexEl"}</button>
@@ -1229,7 +1234,7 @@ export default function App() {
         <div className="auth-switch"><button className={authMode === "login" ? "selected" : ""} onClick={() => { setAuthMode("login"); setAuthFeedback(""); }}>Entrar</button><button className={authMode === "signup" ? "selected" : ""} onClick={() => { setAuthMode("signup"); setAuthFeedback(""); }}>Criar conta</button></div>
         <form onSubmit={submitAuth} className="modal-form">
           {authMode === "signup" && <label>Como quer ser chamado?<input value={authName} onChange={event => setAuthName(event.target.value)} required minLength={2} maxLength={80} autoComplete="name" placeholder="Seu nome" /></label>}
-          <label>E-mail<input type="email" value={authEmail} onChange={event => setAuthEmail(event.target.value)} required autoComplete="email" placeholder="voce@email.com" /></label>
+          <label>E-mail<input type="email" value={authEmail} onChange={event => setAuthEmail(event.target.value.replace(/\s+/g, "").toLowerCase())} onInvalid={event => event.currentTarget.setCustomValidity("Digite um e-mail válido, como voce@email.com.")} onInput={event => event.currentTarget.setCustomValidity("")} required autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="voce@email.com" /></label>
           <label>Senha<input type="password" value={authPassword} onChange={event => setAuthPassword(event.target.value)} required minLength={6} autoComplete={authMode === "signup" ? "new-password" : "current-password"} placeholder="Pelo menos 6 caracteres" /></label>
           {authFeedback && <div className="modal-feedback" role="status">{authFeedback}</div>}
           <button className="primary-button modal-submit" type="submit" disabled={authBusy}>{authBusy ? "Aguarde..." : authMode === "signup" ? "Criar conta grátis" : "Entrar no NexEl"}</button>

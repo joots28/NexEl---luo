@@ -161,3 +161,14 @@ test("curated YouTube lessons are embedded and personalized in Dev Academy", () 
   assert.match(hub, /youtube\.com\/@caiomalheiros/);
   assert.match(css, /\.learn-video-player iframe/);
 });
+
+
+test("email auth normalizes input and explains validation errors in Portuguese", () => {
+  const app = read("../src/App.jsx");
+  assert.match(app, /authEmail\.trim\(\)\.toLowerCase\(\)/);
+  assert.match(app, /event\.target\.value\.replace\(\/\\s\+\/g, ""\)\.toLowerCase\(\)/);
+  assert.match(app, /Digite um e-mail válido, como voce@email\.com\./);
+  assert.match(app, /O formato do e-mail parece inválido/);
+  assert.match(app, /Esse e-mail já possui uma conta/);
+  assert.match(app, /email address not authorized/i);
+});
