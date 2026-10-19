@@ -110,6 +110,70 @@ const CHALLENGES = [
   }
 ];
 
+
+const CURATED_YOUTUBE_VIDEOS = [
+  {
+    id: "a5BCbipPBM0",
+    title: "Como MUITOS JTextFields no NetBeans",
+    description: "Dica prática de interface Java com componentes de formulário.",
+    topic: "java",
+    level: "intermediario",
+    programming_language: "geral",
+    tags: ["java", "desktop", "interface", "logica"],
+    url: "https://www.youtube.com/watch?v=a5BCbipPBM0"
+  },
+  {
+    id: "Zwcg7mdHoGs",
+    title: "Aula 01 — Introdução a API REST (Parte 02)",
+    description: "Continuação da introdução a APIs REST e comunicação entre sistemas.",
+    topic: "backend",
+    level: "intermediario",
+    programming_language: "geral",
+    tags: ["backend", "api", "web", "logica"],
+    url: "https://www.youtube.com/watch?v=Zwcg7mdHoGs"
+  },
+  {
+    id: "MIZx-9ZgnBk",
+    title: "Aula 01 — Introdução a API REST (Parte 01)",
+    description: "Ponto de partida para entender APIs REST e como sistemas se comunicam.",
+    topic: "backend",
+    level: "iniciante",
+    programming_language: "geral",
+    tags: ["backend", "api", "web", "logica"],
+    url: "https://www.youtube.com/watch?v=MIZx-9ZgnBk"
+  },
+  {
+    id: "iUqVOYHiHdw",
+    title: "Começando com React em 2023!",
+    description: "Introdução ao React para quem quer conhecer a construção de interfaces web.",
+    topic: "web",
+    level: "iniciante",
+    programming_language: "javascript",
+    tags: ["web", "javascript", "frontend"],
+    url: "https://www.youtube.com/watch?v=iUqVOYHiHdw"
+  },
+  {
+    id: "X8-e-nj12T8",
+    title: "Criando o primeiro projeto em React",
+    description: "Primeiros passos práticos para iniciar um projeto React.",
+    topic: "web",
+    level: "iniciante",
+    programming_language: "javascript",
+    tags: ["web", "javascript", "frontend"],
+    url: "https://www.youtube.com/watch?v=X8-e-nj12T8"
+  },
+  {
+    id: "h-sIIOd_meI",
+    title: "Aula Xamarin — Criando o Projeto Soma!",
+    description: "Exemplo introdutório de desenvolvimento mobile com Xamarin.",
+    topic: "mobile",
+    level: "iniciante",
+    programming_language: "csharp",
+    tags: ["mobile", "csharp", "aplicativos", "logica"],
+    url: "https://www.youtube.com/watch?v=h-sIIOd_meI"
+  }
+];
+
 function friendlyError(error) {
   const message = error?.message || "Não foi possível concluir a operação.";
   if (/row-level security|violates row-level security/i.test(message)) return "O banco bloqueou esta ação por segurança. Confirme se sua conta tem a permissão necessária.";
@@ -255,6 +319,8 @@ export default function LearningHub({ user }) {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const curatedVideos = useMemo(() => [...CURATED_YOUTUBE_VIDEOS].sort((a, b) => scoreVideo(b, learner) - scoreVideo(a, learner)), [learner]);
 
   const publishedVideos = useMemo(() => {
     const available = videos.filter(video => video.status === "published");
@@ -504,6 +570,17 @@ export default function LearningHub({ user }) {
           </div>
           <div className="learn-form-footer"><small>Você pode mudar suas escolhas quando quiser.</small><button className="primary-button" type="submit" disabled={savingProfile}>{savingProfile ? "Salvando..." : "Personalizar recomendações"} ↗</button></div>
         </form>
+      </section>
+
+      <section className="learn-section">
+        <div className="learn-section-heading"><div><span className="eyebrow">CANAL RECOMENDADO</span><h3>Aulas do Prof. Caio Malheiros</h3><p>Seleção inicial de aulas públicas do canal, ordenada conforme seus interesses, nível e objetivo de aprendizagem. Os vídeos são reproduzidos pelo YouTube e continuam pertencendo ao criador.</p></div><a className="learn-secondary-button" href="https://youtube.com/@caiomalheiros" target="_blank" rel="noreferrer">Abrir canal ↗</a></div>
+        <div className="learn-video-grid">{curatedVideos.map((video, index) => <article className="learn-video-card" key={video.id}>
+          <div className="learn-video-player">
+            <iframe src={"https://www.youtube-nocookie.com/embed/" + video.id} title={video.title} loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen />
+            <span className="learn-video-number">{String(index + 1).padStart(2, "0")}</span>
+          </div>
+          <div className="learn-video-copy"><div className="learn-video-tags"><span>{video.topic}</span><span>{video.level}</span><span>Vídeo externo</span></div><h4>{video.title}</h4><p>{video.description}</p><div className="learn-video-byline"><span className="learn-teacher-avatar">C</span><span><b>Prof. Caio Malheiros</b><small>Canal original no YouTube</small></span><a className="learn-video-external-link" href={video.url} target="_blank" rel="noreferrer">Assistir ↗</a></div></div>
+        </article>)}</div>
       </section>
 
       <section className="learn-section">
