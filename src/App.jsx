@@ -64,6 +64,11 @@ export default function App() {
   const [profileBio, setProfileBio] = useState("");
   const [profileBusy, setProfileBusy] = useState(false);
   const [actionBusy, setActionBusy] = useState("");
+  const [replyPost, setReplyPost] = useState(null);
+  const [replyRows, setReplyRows] = useState([]);
+  const [replyDraft, setReplyDraft] = useState("");
+  const [replyLoading, setReplyLoading] = useState(false);
+  const [replyBusy, setReplyBusy] = useState(false);
 
   const nav = [
     ["Início", "⌂"],
@@ -359,6 +364,85 @@ export default function App() {
     }
   }
 
+  async function loadReplies(post) {
+    if (!supabase || !post) return;
+    setReplyLoading(true);
+    try {
+      const { data: rows, error } = await supabase
+        .from("social_post_replies")
+        .select("id, author_id, body, created_at")
+        .eq("post_id", post.id)
+        .order("created_at", { ascending: true })
+        .limit(100);
+      if (error) throw error;
+
+      const items = rows || [];
+      const authorIds = [...new Set(items.map(item => item.author_id))];
+      const profileResult = authorIds.length
+        ? await supabase.from("profiles").select("id, username, display_name").in("id", authorIds)
+        : { data: [], error: null };
+      if (profileResult.error) throw profileResult.error;
+      const profilesById = new Map((profileResult.data || []).map(item => [item.id, item]));
+
+      setReplyRows(items.map(item => {
+        const author = profilesById.get(item.author_id);
+        const name = author?.display_name || author?.username || "Pessoa usuária";
+        return {
+          ...item,
+          name,
+          handle: author?.username ? "@" + author.username : "@usuario",
+          initials: initialsFor(name),
+          time: timeAgo(item.created_at)
+        };
+      }));
+    } catch (error) {
+      setNotice("Não foi possível carregar as respostas: " + friendlyError(error));
+      setReplyRows([]);
+    } finally {
+      setReplyLoading(false);
+    }
+  }
+
+  async function openReplies(post) {
+    setReplyPost(post);
+    setReplyDraft("");
+    setReplyRows([]);
+    await loadReplies(post);
+  }
+
+  async function submitReply(event) {
+    event.preventDefault();
+    const body = replyDraft.trim();
+    if (!body) {
+      setNotice("Escreva uma resposta antes de enviar.");
+      return;
+    }
+    if (body.length > 300) {
+      setNotice("Sua resposta pode ter no máximo 300 caracteres.");
+      return;
+    }
+    if (!requireUser("Entre para responder a esta publicação.")) return;
+    if (!supabase || !replyPost || replyBusy) return;
+
+    setReplyBusy(true);
+    try {
+      await ensureProfile(user);
+      const { error } = await supabase.from("social_post_replies").insert({
+        post_id: replyPost.id,
+        author_id: user.id,
+        body
+      });
+      if (error) throw error;
+      setReplyDraft("");
+      await Promise.all([loadReplies(replyPost), refreshFeed()]);
+      setNotice("Resposta publicada.");
+    } catch (error) {
+      setNotice("Não foi possível publicar a resposta: " + friendlyError(error));
+    } finally {
+      setReplyBusy(false);
+    }
+  }
+
   async function submitAuth(event) {
     event.preventDefault();
     if (!supabase) {
@@ -518,7 +602,7 @@ export default function App() {
               <div className="post-meta"><b>{post.name}</b><span>{post.handle}</span><i>·</i><span>{post.time}</span><button className="more-button" aria-label="Salvar publicação" title={post.saved ? "Remover dos salvos" : "Salvar"} onClick={() => togglePostRelation("social_post_bookmarks", post, post.saved, "save")}>•••</button></div>
               <p>{post.body}</p><button className="topic-pill" onClick={() => setQuery(post.tag)}># {post.tag}</button>
               <div className="post-actions">
-                <button onClick={() => requireUser("Entre para participar das respostas. As respostas serão conectadas na próxima etapa.")} aria-label="Responder"><Icon>↶</Icon><span>{post.replies}</span></button>
+                <button onClick={() => openReplies(post)} aria-label="Ver respostas"><Icon>↶</Icon><span>{post.replies}</span></button>
                 <button className={post.reposted ? "action-on" : ""} onClick={() => togglePostRelation("social_post_reposts", post, post.reposted, "repost")} aria-label="Repostar" disabled={Boolean(actionBusy)}><Icon>↻</Icon><span>{post.reposts}</span></button>
                 <button className={post.liked ? "like-on" : ""} onClick={() => togglePostRelation("social_post_likes", post, post.liked, "like")} aria-label="Curtir" disabled={Boolean(actionBusy)}><Icon>♡</Icon><span>{post.likes}</span></button>
                 <button className={post.saved ? "action-on" : ""} onClick={() => togglePostRelation("social_post_bookmarks", post, post.saved, "save")} aria-label={post.saved ? "Remover dos salvos" : "Salvar"} disabled={Boolean(actionBusy)}><Icon>◇</Icon></button>
@@ -570,6 +654,34 @@ export default function App() {
           <span className="bio-counter">{profileBio.length}/160</span>
           <button className="primary-button modal-submit" type="submit" disabled={profileBusy}>{profileBusy ? "Salvando..." : "Salvar perfil"}</button>
           <button className="ghost-button modal-logout" type="button" onClick={signOut}>Sair da conta</button>
+        </form>
+      </section>
+    </div>}
+
+    {replyPost && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setReplyPost(null); }}>
+      <section className="modal-card reply-modal" role="dialog" aria-modal="true" aria-labelledby="replies-title">
+        <button className="modal-close" onClick={() => setReplyPost(null)} aria-label="Fechar">×</button>
+        <span className="eyebrow">NEXEL / CONVERSA</span>
+        <h2 id="replies-title">Respostas</h2>
+        <article className="reply-original">
+          <div className="reply-original-meta"><b>{replyPost.name}</b><span>{replyPost.handle}</span><span>{replyPost.time}</span></div>
+          <p>{replyPost.body}</p>
+        </article>
+        <div className="reply-list">
+          {replyLoading && <div className="reply-state">Carregando respostas...</div>}
+          {!replyLoading && replyRows.length === 0 && <div className="reply-state">Ainda não há respostas. Comece a conversa.</div>}
+          {replyRows.map(reply => <article className="reply-item" key={reply.id}>
+            <Avatar initials={reply.initials} />
+            <div className="reply-item-content">
+              <div className="reply-original-meta"><b>{reply.name}</b><span>{reply.handle}</span><span>{reply.time}</span></div>
+              <p>{reply.body}</p>
+            </div>
+          </article>)}
+        </div>
+        <form className="reply-form" onSubmit={submitReply}>
+          <label htmlFor="reply-draft">Sua resposta</label>
+          <textarea id="reply-draft" value={replyDraft} onChange={event => setReplyDraft(event.target.value)} maxLength={300} rows={3} placeholder={user ? "Continue a conversa..." : "Entre para responder..."} />
+          <div className="reply-form-footer"><span>{replyDraft.length}/300</span><button className="primary-button" type="submit" disabled={replyBusy || replyLoading}>{replyBusy ? "Enviando..." : "Responder"} ↑</button></div>
         </form>
       </section>
     </div>}
