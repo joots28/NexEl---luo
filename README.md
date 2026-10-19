@@ -4,7 +4,7 @@
 
 ## Estado desta versão
 
-A prévia pública está conectada ao projeto Supabase NexEl. Cadastro/login, perfil, feed, publicações, curtidas, reposts, respostas, favoritos, seguir pessoas, comunidades públicas, adesão de membros, canais padrão e chat de texto persistente usam o banco remoto. As ações protegidas exigem uma conta e respeitam as políticas de Row Level Security (RLS) do Supabase.
+A prévia pública está conectada ao projeto Supabase NexEl. Cadastro e login, perfil, feed, publicações, curtidas, reposts, respostas, favoritos, seguir pessoas, comunidades públicas, adesão de membros, canais padrão e chat de texto persistente usam o banco remoto. As ações protegidas exigem uma conta e respeitam as políticas de Row Level Security (RLS) do Supabase.
 
 **Ainda não considerar prontos:** mensagens diretas privadas, notificações em tempo real, gestão avançada de canais e permissões, moderação avançada, bots e chamadas de voz/vídeo. Os canais de voz aparecem no sistema, mas áudio/vídeo não está implementado. O chat de texto atual atualiza automaticamente a cada 12 segundos; não é um canal realtime.
 
