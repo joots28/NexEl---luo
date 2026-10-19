@@ -31,6 +31,8 @@ function timeAgo(value) {
 
 function friendlyError(error) {
   const message = error?.message || "Não foi possível concluir a operação.";
+  if (/unsupported provider|provider.*not enabled|provider.*disabled/i.test(message)) return "Esse método ainda precisa ser ativado em Authentication → Sign In / Providers no Supabase.";
+  if (/redirect_to.*not allowed|redirect url.*not allowed|redirect.*not.*allow/i.test(message)) return "A URL do NexEl precisa ser adicionada à lista de redirecionamentos em Authentication → URL Configuration no Supabase.";
   if (/duplicate key|unique constraint/i.test(message)) return "Esse nome de usuário já está em uso. Escolha outro.";
   if (/invalid login credentials/i.test(message)) return "E-mail ou senha incorretos.";
   if (/email not confirmed/i.test(message)) return "Confirme seu e-mail antes de entrar.";
@@ -50,6 +52,7 @@ export default function App() {
   const [showComposer, setShowComposer] = useState(false);
   const [loadingFeed, setLoadingFeed] = useState(true);
   const [user, setUser] = useState(null);
+  const [authInitialized, setAuthInitialized] = useState(false);
   const [profile, setProfile] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
@@ -398,16 +401,31 @@ export default function App() {
   }, [user?.id, user?.email, profile?.display_name]);
 
   useEffect(() => {
-    if (!supabase) return undefined;
+    if (!supabase) {
+      setAuthInitialized(true);
+      return undefined;
+    }
+
     let active = true;
-    supabase.auth.getSession().then(({ data, error }) => {
-      if (!active) return;
-      if (error) setNotice(friendlyError(error));
-      setUser(data.session?.user || null);
-    });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (active) setUser(session?.user || null);
+      if (!active) return;
+      setUser(session?.user || null);
+      setAuthInitialized(true);
     });
+
+    supabase.auth.getSession()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) setNotice(friendlyError(error));
+        setUser(data.session?.user || null);
+        setAuthInitialized(true);
+      })
+      .catch(error => {
+        if (!active) return;
+        setNotice("Não consegui verificar sua sessão: " + friendlyError(error));
+        setAuthInitialized(true);
+      });
+
     return () => {
       active = false;
       listener.subscription.unsubscribe();
@@ -881,6 +899,27 @@ export default function App() {
     }
   }
 
+  async function signInWithProvider(provider) {
+    if (!supabase) {
+      setAuthFeedback("A conexão com o Supabase não está configurada nesta versão.");
+      return;
+    }
+
+    setAuthBusy(true);
+    setAuthFeedback("");
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo: window.location.origin }
+      });
+      if (error) throw error;
+    } catch (error) {
+      setAuthFeedback(friendlyError(error));
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
   async function signOut() {
     if (!supabase) return;
     const { error } = await supabase.auth.signOut();
@@ -961,6 +1000,72 @@ export default function App() {
   }
 
   const initials = initialsFor(profile?.display_name || user?.email || "NexEl");
+
+  if (!authInitialized) {
+    return <div className="auth-gate auth-gate-loading" role="status" aria-live="polite">
+      <div className="gate-mark">N<span>.</span></div>
+      <p>Preparando seu espaço no NexEl...</p>
+    </div>;
+  }
+
+  if (!user) {
+    return <div className="auth-gate">
+      <main className="auth-gate-content">
+        <header className="auth-gate-header">
+          <div className="gate-brand-lockup"><div className="gate-brand-mark">N<span>.</span></div><div><strong>NexEl</strong><small>Ideias que conectam.</small></div></div>
+          <span className="gate-header-note"><span className="gate-live-dot" /> Sua rede começa aqui</span>
+        </header>
+
+        <div className="auth-gate-layout">
+          <section className="auth-gate-story">
+            <span className="eyebrow">NEXEL / CONEXÕES REAIS</span>
+            <h1>Ideias boas merecem <span>encontrar pessoas.</span></h1>
+            <p>Entre para acompanhar conversas, compartilhar suas ideias, encontrar comunidades e falar com pessoas que têm interesses em comum.</p>
+            <div className="auth-gate-benefits">
+              <div><span className="benefit-icon">↗</span><span><b>Um feed para descobrir</b><small>Ideias, temas e perspectivas da comunidade.</small></span></div>
+              <div><span className="benefit-icon">▦</span><span><b>Comunidades do seu jeito</b><small>Espaços para trocar conhecimento e colaborar.</small></span></div>
+              <div><span className="benefit-icon">✉</span><span><b>Conversas privadas</b><small>Mensagens acessíveis somente às pessoas participantes.</small></span></div>
+            </div>
+            <p className="auth-gate-privacy">O conteúdo da rede aparece depois que você entra. Sua sessão é gerenciada pelo Supabase Auth.</p>
+          </section>
+
+          <section className="auth-gate-card" aria-labelledby="auth-gate-title">
+            <div className="gate-card-top"><div className="gate-card-symbol">N<span>.</span></div><span className="eyebrow">SUA CONTA NEXEL</span></div>
+            <h2 id="auth-gate-title">{authMode === "signup" ? "Crie sua conta." : "Entre para continuar."}</h2>
+            <p className="gate-card-description">{authMode === "signup" ? "Leva só alguns instantes para começar a fazer parte." : "Entre na sua conta para ver o conteúdo e participar da rede."}</p>
+
+            <div className="auth-provider-stack">
+              <button className="oauth-button" type="button" onClick={() => signInWithProvider("github")} disabled={authBusy || !isSupabaseConfigured}>
+                <span className="auth-provider-icon github-icon" aria-hidden="true">GH</span><span>Continuar com GitHub</span>
+              </button>
+              <button className="oauth-button" type="button" onClick={() => signInWithProvider("google")} disabled={authBusy || !isSupabaseConfigured}>
+                <span className="auth-provider-icon google-icon" aria-hidden="true">G</span><span>Continuar com Google</span>
+              </button>
+            </div>
+
+            <div className="auth-divider"><span>OU USE SEU E-MAIL</span></div>
+            <div className="auth-switch" role="tablist" aria-label="Tipo de acesso">
+              <button type="button" role="tab" aria-selected={authMode === "login"} className={authMode === "login" ? "selected" : ""} onClick={() => { setAuthMode("login"); setAuthFeedback(""); }}>Entrar</button>
+              <button type="button" role="tab" aria-selected={authMode === "signup"} className={authMode === "signup" ? "selected" : ""} onClick={() => { setAuthMode("signup"); setAuthFeedback(""); }}>Criar conta</button>
+            </div>
+
+            <form onSubmit={submitAuth} className="modal-form gate-email-form">
+              {authMode === "signup" && <label>Como quer ser chamado?<input value={authName} onChange={event => setAuthName(event.target.value)} required minLength={2} maxLength={80} autoComplete="name" placeholder="Seu nome" /></label>}
+              <label>E-mail<input type="email" value={authEmail} onChange={event => setAuthEmail(event.target.value)} required autoComplete="email" placeholder="voce@email.com" /></label>
+              <label>Senha<input type="password" value={authPassword} onChange={event => setAuthPassword(event.target.value)} required minLength={6} autoComplete={authMode === "signup" ? "new-password" : "current-password"} placeholder="Pelo menos 6 caracteres" /></label>
+              {authFeedback && <div className="modal-feedback" role="status">{authFeedback}</div>}
+              <button className="primary-button modal-submit" type="submit" disabled={authBusy || !isSupabaseConfigured}>{authBusy ? "Aguarde..." : authMode === "signup" ? "Criar conta grátis" : "Entrar no NexEl"}</button>
+            </form>
+
+            {!isSupabaseConfigured && <div className="gate-config-warning" role="status">A conexão do Supabase não está configurada neste site. Defina VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY no ambiente do Render.</div>}
+            <p className="gate-terms">Ao continuar, você concorda em usar o NexEl com respeito e responsabilidade.</p>
+          </section>
+        </div>
+
+        <footer className="auth-gate-footer"><span>© 2026 NexEl</span><span>Um lugar para construir.</span><span>Protegido por Supabase Auth</span></footer>
+      </main>
+    </div>;
+  }
 
   return <div className="app-shell">
     <aside className="left-rail">
