@@ -43,14 +43,18 @@ test("social interactions persist to database tables", () => {
   assert.match(app, /from\("profiles"\)/);
   assert.match(app, /from\("social_post_replies"\)\.insert/);
   assert.match(app, /aria-labelledby="replies-title"/);
+  assert.match(app, /create_server_with_defaults/);
+  assert.match(app, /from\("messages"\)\.insert/);
+  assert.match(app, /from\("server_members"\)\.insert/);
   assert.match(app, /body\.length > 300/);
 });
 
-test("README distinguishes connected social features from planned features", () => {
+test("README documents communities and text chat without claiming voice is ready", () => {
   const readme = read("../README.md");
   assert.match(readme, /cadastro e login/i);
   assert.match(readme, /curtidas/i);
-  assert.match(readme, /mensagens privadas/i);
+  assert.match(readme, /mensagens diretas privadas/i);
+  assert.match(readme, /canais de texto/i);
   assert.match(readme, /voz\/vídeo/i);
 });
 
