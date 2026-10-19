@@ -18,21 +18,21 @@ test("responsive shell and mobile navigation are present", () => {
   const app = read("../src/App.jsx");
   const css = read("../src/styles.css");
   assert.match(app, /mobile-nav/);
-  assert.match(css, /@media\\(max-width:760px\\)/);
+  assert.match(css, /@media\(max-width:760px\)/);
 });
 
 test("post composer validates text and sends it to Supabase", () => {
   const app = read("../src/App.jsx");
-  assert.match(app, /const body = draft\\.trim\\(\\)/);
-  assert.match(app, /body\\.length > 500/);
-  assert.match(app, /from\\("social_posts"\\)\\.insert/);
+  assert.match(app, /const body = draft\.trim\(\)/);
+  assert.match(app, /body\.length > 500/);
+  assert.match(app, /from\("social_posts"\)\.insert/);
 });
 
 test("email signup and password login use Supabase Auth", () => {
   const app = read("../src/App.jsx");
-  assert.match(app, /auth\\.signUp/);
-  assert.match(app, /auth\\.signInWithPassword/);
-  assert.match(app, /auth\\.signOut/);
+  assert.match(app, /auth\.signUp/);
+  assert.match(app, /auth\.signInWithPassword/);
+  assert.match(app, /auth\.signOut/);
 });
 
 test("social interactions persist to database tables", () => {
@@ -40,7 +40,7 @@ test("social interactions persist to database tables", () => {
   for (const table of ["social_post_likes", "social_post_reposts", "social_post_bookmarks", "social_follows"]) {
     assert.ok(app.includes(table), "missing Supabase operation for " + table);
   }
-  assert.match(app, /from\\("profiles"\\)/);
+  assert.match(app, /from\("profiles"\)/);
 });
 
 test("README distinguishes connected social features from planned features", () => {
@@ -48,10 +48,10 @@ test("README distinguishes connected social features from planned features", () 
   assert.match(readme, /cadastro e login/i);
   assert.match(readme, /curtidas/i);
   assert.match(readme, /mensagens privadas/i);
-  assert.match(readme, /voz\\/vídeo/i);
+  assert.match(readme, /voz\/vídeo/i);
 });
 
 test("environment template is tracked and local secrets are ignored", () => {
   assert.ok(existsSync(new URL("../.env.example", import.meta.url)));
-  assert.match(read("../.gitignore"), /\\.env\\.\\*/);
+  assert.match(read("../.gitignore"), /\.env\.\*/);
 });
