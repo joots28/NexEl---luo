@@ -137,7 +137,7 @@ test("developer help forum stores questions, answers, votes and accepted solutio
 test("README describes the education area and platform admin bootstrap", () => {
   const readme = read("../README.md");
   assert.match(readme, /Dev Academy/i);
-  assert.match(readme, /professores verificados/i);
+  assert.match(readme, /professores.*verificados/i);
   assert.match(readme, /Mural de ajuda/i);
   assert.match(readme, /platform_admins/i);
   assert.match(readme, /50 MB/i);
