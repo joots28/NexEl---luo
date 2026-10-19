@@ -22,7 +22,7 @@ A prévia pública está conectada ao projeto Supabase NexEl. A rede social exig
 - Cadastro e login com e-mail/senha pelo Supabase Auth
 - Botões para login OAuth com GitHub e Google (requer Client ID/Secret e ativação dos provedores no Supabase)
 - Criação de perfil e edição de nome, usuário e bio
-- Feed público carregado do banco
+- Feed de publicações carregado do banco após o login (visível a todas as contas autenticadas)
 - Publicações de texto de até 500 caracteres
 - Curtidas, reposts, respostas (até 300 caracteres), favoritos e seguir/deixar de seguir persistidos no banco
 - Contadores de curtidas, respostas e reposts calculados a partir dos registros existentes
