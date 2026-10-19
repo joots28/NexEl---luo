@@ -19,11 +19,11 @@ test("responsive shell and mobile navigation are present", () => {
 });
 test("post composer validates blank and over-limit text", () => {
   const app = read("../src/App.jsx");
-  assert.match(app, /body\.trim\(\)/);
+  assert.match(app, /const body = draft\.trim\(\)/);
   assert.match(app, /body\.length > 500/);
 });
 test("local preview clearly discloses backend is not connected", () => {
-  assert.match(read("../README.md"), /ainda dependem da integração/i);
+  assert.match(read("../README.md"), /ainda não está conectada à autenticação nem às consultas remotas/i);
 });
 test("env template is tracked and local secrets are ignored", () => {
   assert.ok(existsSync(new URL("../.env.example", import.meta.url)));
