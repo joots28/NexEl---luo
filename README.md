@@ -4,9 +4,9 @@
 
 ## Estado desta versão
 
-A prévia pública agora está conectada ao projeto Supabase NexEl. As funcionalidades de cadastro e login, perfil, feed público, publicação de texto, curtidas, reposts, favoritos e seguir pessoas usam o banco remoto. As ações sociais exigem uma conta e respeitam as políticas de Row Level Security (RLS) do Supabase.
+A prévia pública está conectada ao projeto Supabase NexEl. Cadastro/login, perfil, feed, publicações, curtidas, reposts, respostas, favoritos, seguir pessoas, comunidades públicas, adesão de membros, canais padrão e chat de texto persistente usam o banco remoto. As ações protegidas exigem uma conta e respeitam as políticas de Row Level Security (RLS) do Supabase.
 
-**Ainda não considerar prontos:** mensagens privadas, notificações em tempo real, comunidades/canais persistentes, moderação avançada, bots e voz/vídeo. Essas partes serão implementadas em etapas próprias e precisam de testes antes de serem anunciadas como concluídas.
+**Ainda não considerar prontos:** mensagens diretas privadas, notificações em tempo real, gestão avançada de canais e permissões, moderação avançada, bots e chamadas de voz/vídeo. Os canais de voz aparecem no sistema, mas áudio/vídeo não está implementado. O chat de texto atual atualiza automaticamente a cada 12 segundos; não é um canal realtime.
 
 ## Stack
 
@@ -26,6 +26,9 @@ A prévia pública agora está conectada ao projeto Supabase NexEl. As funcional
 - Contadores de curtidas, respostas e reposts calculados a partir dos registros existentes
 - Busca por pessoas, conteúdo e tópico
 - Feed de itens salvos vinculado à conta
+- Criação de comunidades públicas com canais padrão de texto e voz
+- Descoberta e entrada em comunidades públicas; lista das comunidades das quais a pessoa participa
+- Chat de texto persistente por canal com atualização automática, limite de 2.000 caracteres e controle de acesso RLS
 - Feedback de erros, estado de carregamento e layout adaptável
 
 ## Executar localmente
@@ -54,7 +57,7 @@ npm run dev
 3. Resolver o aviso do Advisor relativo à função SECURITY DEFINER `accept_server_invite` antes de ativar convites de comunidades.
 4. Adicionar testes automatizados que executem contra um projeto de teste isolado.
 5. Implementar notificações, bloqueios, denúncias, limites contra spam e ferramentas de moderação.
-6. Construir comunidades, canais e mensagens com suas regras de acesso.
+6. Adicionar criação/gestão de canais personalizados, convites seguros e mensagens diretas com suas próprias regras de privacidade.
 7. Implementar voz/vídeo com infraestrutura própria e testes específicos de qualidade e privacidade.
 
 ## Identidade visual
