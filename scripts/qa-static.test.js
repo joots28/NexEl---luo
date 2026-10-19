@@ -142,3 +142,10 @@ test("README describes the education area and platform admin bootstrap", () => {
   assert.match(readme, /platform_admins/i);
   assert.match(readme, /50 MB/i);
 });
+
+
+test("learning video status mapping has no duplicate rejected key", () => {
+  const hub = read("../src/components/LearningHub.jsx");
+  const statusMap = hub.match(/function statusCopy\(status\) \{[\s\S]*?\n\}/)?.[0] || "";
+  assert.equal((statusMap.match(/rejected\s*:/g) || []).length, 1);
+});
