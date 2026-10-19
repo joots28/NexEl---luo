@@ -132,9 +132,7 @@ function statusCopy(status) {
     approved: ["Professor verificado", "status-approved"],
     rejected: ["Precisa de ajustes", "status-rejected"],
     pending_review: ["Vídeo em revisão", "status-pending"],
-    published: ["Publicado", "status-approved"],
-    rejected_video: ["Não publicado", "status-rejected"],
-    rejected: ["Não publicado", "status-rejected"]
+    published: ["Publicado", "status-approved"]
   })[status] || [status, ""];
 }
 
