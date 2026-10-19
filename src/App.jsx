@@ -596,8 +596,8 @@ export default function App() {
       });
       if (error) throw error;
       setChatDraft("");
-      await loadChannelMessages(currentChannel);
       setNotice("");
+      await loadChannelMessages(currentChannel);
     } catch (error) {
       setNotice("Não foi possível enviar a mensagem: " + friendlyError(error));
     } finally {
