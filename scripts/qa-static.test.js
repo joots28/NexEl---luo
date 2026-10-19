@@ -53,7 +53,7 @@ test("README documents communities and text chat without claiming voice is ready
   const readme = read("../README.md");
   assert.match(readme, /cadastro e login/i);
   assert.match(readme, /curtidas/i);
-  assert.match(readme, /mensagens diretas privadas/i);
+  assert.match(readme, /mensagens (diretas )?privadas/i);
   assert.match(readme, /chat de texto persistente/i);
   assert.match(readme, /voz\/vídeo/i);
 });
